@@ -5,13 +5,13 @@ import { Heart } from "lucide-react";
 function ItemCard({ title, description, ratings, location, date, price, imageUrl, onHeartClick, isFavorited }) {
     return (
         <Card
-            className={`w-full sm:w-64 md:w-80 lg:w-96 overflow-hidden p-0 transition`}
+            className={`w-full sm:w-64 md:w-80 lg:w-100 overflow-hidden p-0 transition`}
         >
             {imageUrl && (
                 <img
                     src={imageUrl}
                     alt={title}
-                    className="w-full h-40 object-cover block"
+                    className="w-full h-60 object-cover block"
                 />
             )}
 
