@@ -1,8 +1,25 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Heart } from "lucide-react";
 
-function ItemCard({ title, description, ratings, location, date, price, imageUrl, onHeartClick, isFavorited }) {
+function ItemCard({
+    title,
+    description,
+    ratings,
+    location,
+    date,
+    price,
+    imageUrl,
+    onHeartClick,
+    isFavorited,
+    isOwner,
+}) {
     return (
         <Card
             className={`w-full sm:w-64 md:w-80 lg:w-100 overflow-hidden p-0 transition`}
@@ -21,11 +38,23 @@ function ItemCard({ title, description, ratings, location, date, price, imageUrl
                     <Button
                         variant="ghost"
                         onClick={onHeartClick}
-                        className={isFavorited ? "bg-red-100 cursor-pointer" : "cursor-pointer"}
+                        className={
+                            isFavorited
+                                ? "bg-red-100 cursor-pointer"
+                                : "cursor-pointer"
+                        }
                     >
-                        <Heart className={`${isFavorited ? "text-red-500 fill-red-500" : "text-gray-500"}`} />
+                        <Heart
+                            className={`${
+                                isFavorited
+                                    ? "text-red-500 fill-red-500"
+                                    : "text-gray-500"
+                            }`}
+                        />
                     </Button>
-                    {ratings && <p className="text-sm text-gray-500">⭐ {ratings}</p>}
+                    {ratings && (
+                        <p className="text-sm text-gray-500">⭐ {ratings}</p>
+                    )}
                 </div>
             </CardHeader>
 
@@ -34,10 +63,19 @@ function ItemCard({ title, description, ratings, location, date, price, imageUrl
                 <div className="mt-2 text-sm text-gray-600 space-y-1">
                     {location && <p>{location}</p>}
                     {date && <p>{date}</p>}
-                    <div className="flex flex-row justify-between">
-                        {price && <p className="text-[#FFAB00] font-bold text-xl">₱{price}/day</p>}
-                        <Button className='cursor-pointer'>
-                            <p>Rent Now</p>
+                    <div className="flex flex-row justify-between items-center">
+                        {price && (
+                            <p className="text-[#FFAB00] font-bold text-xl">
+                                ₱{price}/day
+                            </p>
+                        )}
+                        <Button
+                            className={`cursor-pointer ${
+                                isOwner ? "opacity-60 cursor-not-allowed" : ""
+                            }`}
+                            disabled={isOwner}
+                        >
+                            <p>{isOwner ? "Your Item" : "Rent Now"}</p>
                         </Button>
                     </div>
                 </div>

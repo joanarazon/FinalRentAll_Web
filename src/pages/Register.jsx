@@ -316,7 +316,7 @@ function Register() {
                             id_image_url: idImageUrl,
                             face_image_url: faceImageUrl,
                             face_verified: true,
-                            role: 'unverified'
+                            role: "unverified",
                         },
                     ]);
 
@@ -671,12 +671,14 @@ function Register() {
                     </Button>
                 </div>
                 <div className="text-center mt-4 flex flex-row items-center gap-2 justify-center">
-                    <p className="text-gray-600 mb-0">Don't have an account?</p>
+                    <p className="text-gray-600 mb-0">
+                        Already have an account?
+                    </p>
                     <a
                         className="font-bold text-sm text-[#F09B35] hover:text-[#DB7C0B]"
                         href="/"
                     >
-                        Login
+                        Login here
                     </a>
                 </div>
             </div>
