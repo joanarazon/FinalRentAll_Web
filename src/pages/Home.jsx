@@ -1,16 +1,20 @@
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useUser } from "../hooks/useUser";
 import TopMenu from "../components/topMenu";
 import ItemCard from "../components/ItemCard";
 import AddItemModal from "../components/AddItemModal";
-import { useState } from "react";
+import { supabase } from "../../supabaseClient";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function Home() {
     const user = useUser();
     const [favorites, setFavorites] = useState([]);
     const [addOpen, setAddOpen] = useState(false);
-    const [selectedCategory, setSelectedCategory] = useState("");
+    const [categories, setCategories] = useState([]); // {category_id, name}
+    const [selectedCategoryId, setSelectedCategoryId] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
+    const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(false);
 
     const toggleFavorite = (item) => {
         setFavorites((prev) => {
@@ -25,53 +29,109 @@ function Home() {
         });
     };
 
-    const categories = [
-        "All",
-        "Tools",
-        "Car",
-        "Clothing & Accessories",
-        "Electronics",
-        "Others",
-    ];
+    const fetchCategories = useCallback(async () => {
+        const { data, error } = await supabase
+            .from("categories")
+            .select("category_id,name")
+            .order("name");
+        if (!error) setCategories(data || []);
+    }, []);
 
-    const [items, setItems] = useState([
-        {
-            title: "Hammer",
-            description: "Tools category",
-            ratings: "5.0",
-            location: "Igpit-Opol",
-            date: "04-15-2025",
-            price: "100",
-            imageUrl: "https://picsum.photos/400/300?random=1",
-        },
-        {
-            title: "Car Tire",
-            description: "Car category",
-            ratings: "4.5",
-            location: "CDO City",
-            date: "04-12-2025",
-            price: "150",
-            imageUrl: "https://picsum.photos/400/300?random=2",
-        },
-        {
-            title: "T-Shirt",
-            description: "Clothing category",
-            ratings: "4.8",
-            location: "City Mall",
-            date: "04-10-2025",
-            price: "25",
-            imageUrl: "https://picsum.photos/400/300?random=3",
-        },
-        {
-            title: "Headphones",
-            description: "Electronics category",
-            ratings: "4.9",
-            location: "Gaisano Mall",
-            date: "04-18-2025",
-            price: "80",
-            imageUrl: "https://picsum.photos/400/300?random=4",
-        },
-    ]);
+    const getImageUrl = async (userId, itemId) => {
+        try {
+            const dir = `${userId}/${itemId}`;
+            const { data: files, error } = await supabase.storage
+                .from("Items-photos")
+                .list(dir, {
+                    limit: 1,
+                    sortBy: { column: "name", order: "desc" },
+                });
+            if (error || !files || files.length === 0) return undefined;
+            const file = files[0];
+            const fullPath = `${dir}/${file.name}`;
+            const { data: pub } = supabase.storage
+                .from("Items-photos")
+                .getPublicUrl(fullPath);
+            return pub?.publicUrl;
+        } catch (e) {
+            console.warn("image list failed", e.message);
+            return undefined;
+        }
+    };
+
+    const fetchItems = useCallback(async () => {
+        setLoading(true);
+        try {
+            let query = supabase
+                .from("items")
+                .select(
+                    "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,available,created_at"
+                )
+                .eq("available", true)
+                .order("created_at", { ascending: false });
+            if (selectedCategoryId) {
+                query = query.eq("category_id", Number(selectedCategoryId));
+            }
+            const { data, error } = await query;
+            if (error) throw error;
+
+            const withImages = await Promise.all(
+                (data || []).map(async (it) => {
+                    const imageUrl = await getImageUrl(it.user_id, it.item_id);
+                    return {
+                        ownerId: it.user_id,
+                        title: it.title,
+                        description: it.description || "",
+                        location: it.location || "",
+                        date: new Date(it.created_at).toLocaleDateString(),
+                        price: String(it.price_per_day),
+                        imageUrl: imageUrl,
+                    };
+                })
+            );
+
+            const filtered = withImages.filter((item) => {
+                if (!searchTerm) return true;
+                const needle = searchTerm.toLowerCase();
+                return (
+                    item.title.toLowerCase().includes(needle) ||
+                    item.description.toLowerCase().includes(needle) ||
+                    item.location.toLowerCase().includes(needle)
+                );
+            });
+
+            setItems(filtered);
+        } catch (e) {
+            console.error("Fetch items failed:", e.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [searchTerm, selectedCategoryId]);
+
+    useEffect(() => {
+        fetchCategories();
+    }, [fetchCategories]);
+
+    useEffect(() => {
+        fetchItems();
+    }, [fetchItems]);
+
+    useEffect(() => {
+        const channel = supabase
+            .channel("items_changes")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "items" },
+                () => {
+                    fetchItems();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [fetchItems]);
 
     if (!user) return <p>Loading...</p>;
 
@@ -85,17 +145,27 @@ function Home() {
             />
             {/* Desktop category menu */}
             <div className="hidden md:flex flex-row gap-4 md:gap-10 mt-10 px-4 md:px-30">
+                <p
+                    className={`cursor-pointer px-2 py-1 md:px-0 md:py-0 ${
+                        selectedCategoryId === "" ? "font-bold underline" : ""
+                    }`}
+                    onClick={() => setSelectedCategoryId("")}
+                >
+                    All
+                </p>
                 {categories.map((cat) => (
                     <p
-                        key={cat}
+                        key={cat.category_id}
                         className={`cursor-pointer px-2 py-1 md:px-0 md:py-0 ${
-                            selectedCategory === cat
+                            selectedCategoryId === String(cat.category_id)
                                 ? "font-bold underline"
                                 : ""
                         }`}
-                        onClick={() => setSelectedCategory(cat)}
+                        onClick={() =>
+                            setSelectedCategoryId(String(cat.category_id))
+                        }
                     >
-                        {cat}
+                        {cat.name}
                     </p>
                 ))}
             </div>
@@ -103,14 +173,14 @@ function Home() {
             {/* Mobile dropdown */}
             <div className="relative block md:hidden mt-10 px-4">
                 <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    value={selectedCategoryId}
+                    onChange={(e) => setSelectedCategoryId(e.target.value)}
                     className="w-full border rounded-lg px-3 py-2 pr-8 appearance-none"
                 >
-                    <option value="">Select Category</option>
+                    <option value="">All</option>
                     {categories.map((cat) => (
-                        <option key={cat} value={cat}>
-                            {cat}
+                        <option key={cat.category_id} value={cat.category_id}>
+                            {cat.name}
                         </option>
                     ))}
                 </select>
@@ -128,47 +198,33 @@ function Home() {
             </div>
 
             <div className="flex flex-wrap gap-4 mt-10 px-4 md:px-30">
-                {(() => {
-                    // Filter items first
-                    const filteredItems = items.filter((item) => {
-                        // Category filter
-                        if (selectedCategory && selectedCategory !== "All") {
-                            if (
-                                !item.description
-                                    .toLowerCase()
-                                    .includes(selectedCategory.toLowerCase())
-                            ) {
-                                return false;
-                            }
-                        }
-                        // Search filter
-                        if (searchTerm) {
-                            return (
-                                item.title
-                                    .toLowerCase()
-                                    .includes(searchTerm.toLowerCase()) ||
-                                item.description
-                                    .toLowerCase()
-                                    .includes(searchTerm.toLowerCase()) ||
-                                item.location
-                                    .toLowerCase()
-                                    .includes(searchTerm.toLowerCase())
-                            );
-                        }
-                        return true;
-                    });
-
-                    // If no items match, show message
-                    if (filteredItems.length === 0) {
-                        return (
-                            <p className="text-gray-500 text-lg">
-                                No Item Found
-                            </p>
-                        );
-                    }
-
-                    // Otherwise, render the cards
-                    return filteredItems.map((item, index) => {
+                {loading && (
+                    <>
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <div
+                                key={i}
+                                className="w-full sm:w-64 md:w-80 lg:w-100 overflow-hidden p-0"
+                            >
+                                <Skeleton className="w-full h-60 mb-2" />
+                                <div className="px-1">
+                                    <Skeleton className="h-5 w-3/4 mb-2" />
+                                    <Skeleton className="h-4 w-full mb-1" />
+                                    <Skeleton className="h-4 w-2/3 mb-3" />
+                                    <div className="flex justify-between items-center">
+                                        <Skeleton className="h-6 w-24" />
+                                        <Skeleton className="h-10 w-24" />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </>
+                )}
+                {!loading && items.length === 0 && (
+                    <p className="text-gray-500 text-lg">No Item Found</p>
+                )}
+                {!loading &&
+                    items.length > 0 &&
+                    items.map((item, index) => {
                         const isFavorited = favorites.some(
                             (fav) => fav.title === item.title
                         );
@@ -182,12 +238,12 @@ function Home() {
                                 date={item.date}
                                 price={item.price}
                                 imageUrl={item.imageUrl}
+                                isOwner={user?.id === item.ownerId}
                                 isFavorited={isFavorited}
                                 onHeartClick={() => toggleFavorite(item)}
                             />
                         );
-                    });
-                })()}
+                    })}
             </div>
 
             <button
@@ -201,17 +257,8 @@ function Home() {
                 open={addOpen}
                 onOpenChange={setAddOpen}
                 userId={user?.id}
-                onCreated={(newItem) => {
-                    const card = {
-                        title: newItem.title,
-                        description: newItem.description || "",
-                        ratings: "5.0",
-                        location: newItem.location || "",
-                        date: new Date().toLocaleDateString(),
-                        price: String(newItem.price_per_day),
-                        imageUrl: newItem.imageUrl || undefined,
-                    };
-                    setItems((prev) => [card, ...prev]);
+                onCreated={() => {
+                    fetchItems();
                 }}
             />
         </div>
