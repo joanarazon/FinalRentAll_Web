@@ -8,7 +8,7 @@ export default function AdminHome() {
 
     return (
         <>
-            <AdminLayout>
+            <AdminLayout className="bg-[#FFFBF2] min-h-screen">
                 <p>{user?.first_name} Dashboard</p>
             </AdminLayout>
         </>
