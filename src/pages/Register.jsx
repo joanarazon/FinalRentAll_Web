@@ -316,6 +316,7 @@ function Register() {
                             id_image_url: idImageUrl,
                             face_image_url: faceImageUrl,
                             face_verified: true,
+                            role: 'unverified'
                         },
                     ]);
 
