@@ -4,10 +4,24 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useUser } from "../hooks/useUser";
 import { Heart, Menu } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function TopMenu({ activePage, favorites = [], searchTerm, setSearchTerm }) {
     const user = useUser();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const navigate = useNavigate();
+
+    const handleInbox = () => {
+        navigate('/inbox')
+    }
+
+    const handleHome = () => {
+        navigate('/home')
+    }
+
+    const handleNotification = () => {
+        navigate('/notifications')
+    }
 
     const linkClass = (page) =>
         `text-gray-600 hover:text-black ${activePage === page
@@ -23,9 +37,15 @@ export default function TopMenu({ activePage, favorites = [], searchTerm, setSea
 
                 {/* Desktop Links */}
                 <div className="hidden md:flex items-center gap-6">
-                    <Button variant="link" className={`${linkClass("home")} cursor-pointer`}>Home</Button>
-                    <Button variant="link" className={`${linkClass("inbox")} cursor-pointer`}>Inbox</Button>
-                    <Button variant="link" className={`${linkClass("notifications")} cursor-pointer`}>Notifications</Button>
+                    <Button variant="link" className={`${linkClass("home")} cursor-pointer`} onClick={handleHome}>Home</Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("inbox")} cursor-pointer`}
+                        onClick={handleInbox}
+                    >
+                        Inbox
+                    </Button>
+                    <Button variant="link" className={`${linkClass("notifications")} cursor-pointer`} onClick={handleNotification}>Notifications</Button>
                 </div>
 
                 {/* Mobile menu button */}
@@ -42,7 +62,7 @@ export default function TopMenu({ activePage, favorites = [], searchTerm, setSea
             {mobileMenuOpen && (
                 <div className="flex flex-col gap-2 md:hidden mt-2">
                     <Button variant="link" className={linkClass("home")}>Home</Button>
-                    <Button variant="link" className={linkClass("inbox")}>Inbox</Button>
+                    <Button variant="link" onClick={handleInbox}>Inbox</Button>
                     <Button variant="link" className={linkClass("notifications")}>Notifications</Button>
                 </div>
             )}
