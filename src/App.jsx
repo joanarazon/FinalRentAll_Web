@@ -5,6 +5,7 @@ import Register from './pages/Register';
 import Home from './pages/Home';
 import Inbox from './pages/Inbox';
 import Notification from './pages/Notification';
+import AdminHome from './pages/admin/AdminHome';
 
 export default class App extends Component {
   render() {
@@ -16,6 +17,7 @@ export default class App extends Component {
           <Route path="/home" element={<Home />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/notifications" element={<Notification />} />
+          <Route path="/adminhome" element={<AdminHome />} />
         </Routes>
       </Router>
     );
