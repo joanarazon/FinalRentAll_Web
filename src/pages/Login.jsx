@@ -16,7 +16,7 @@ function Login() {
           <form className="w-3/4 mt-4">
             <div className="mb-4">
               <input
-                className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-300 leading-tight focus:outline-none focus:shadow-outline
+                className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline
                 placeholder-gray-400 mb-1"
                 id="email"
                 type="email"
@@ -25,7 +25,7 @@ function Login() {
             </div>
             <div className="mb-6">
               <input
-                className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-300 leading-tight focus:outline-none focus:shadow-outline
+                className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline
                 placeholder-gray-400"
                 id="password"
                 type="password"
