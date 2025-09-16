@@ -1,10 +1,12 @@
 import rentLogo from "../assets/rent.png";
 import { useState } from "react";
 import { supabase } from "../../supabaseClient";
+import { useNavigate } from "react-router-dom";
 
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const navigate = useNavigate();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -13,7 +15,6 @@ function Login() {
     }
 
     try {
-      // Query Supabase users table
       const { data, error } = await supabase
         .from("users")
         .select("*")
@@ -23,9 +24,16 @@ function Login() {
       if (error) throw error;
 
       if (data.length > 0) {
-        alert(`Welcome back, ${data[0].first_name}!`);
-        console.log("Logged in user:", data[0]);
-        // Here you can redirect the user or set context/session
+        const loggedInUser = data[0];
+
+        // Remove sensitive info before storing
+        const { password, ...userWithoutPassword } = loggedInUser;
+
+        // Store user info in localStorage
+        localStorage.setItem("loggedInUser", JSON.stringify(userWithoutPassword));
+
+        alert(`Welcome back, ${loggedInUser.first_name}!`);
+        navigate('/home'); // Navigate to Home
       } else {
         alert("Invalid email or password");
       }
