@@ -2,9 +2,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Heart } from "lucide-react";
 
-function ItemCard({ title, description, ratings, location, date, price, imageUrl }) {
+function ItemCard({ title, description, ratings, location, date, price, imageUrl, onHeartClick, isFavorited }) {
     return (
-        <Card className="w-full sm:w-64 md:w-80 lg:w-96 overflow-hidden p-0">
+        <Card
+            className={`w-full sm:w-64 md:w-80 lg:w-96 overflow-hidden p-0 transition`}
+        >
             {imageUrl && (
                 <img
                     src={imageUrl}
@@ -16,8 +18,12 @@ function ItemCard({ title, description, ratings, location, date, price, imageUrl
             <CardHeader className="flex justify-between items-center px-3 pt-2 pb-0">
                 <CardTitle className="text-lg font-semibold">{title}</CardTitle>
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost">
-                        <Heart className="text-gray-500 w-5 h-5 md:w-6 md:h-6" />
+                    <Button
+                        variant="ghost"
+                        onClick={onHeartClick}
+                        className={isFavorited ? "bg-red-100" : ""}
+                    >
+                        <Heart className={`${isFavorited ? "text-red-500 fill-red-500" : "text-gray-500"}`} />
                     </Button>
                     {ratings && <p className="text-sm text-gray-500">⭐ {ratings}</p>}
                 </div>
@@ -31,7 +37,7 @@ function ItemCard({ title, description, ratings, location, date, price, imageUrl
                     <div className="flex flex-row justify-between">
                         {price && <p className="text-[#FFAB00] font-bold text-xl">₱{price}/day</p>}
                         <Button>
-                            <p>Rent Now</p>
+                            <p className='cursor-pointer'>Rent Now</p>
                         </Button>
                     </div>
                 </div>

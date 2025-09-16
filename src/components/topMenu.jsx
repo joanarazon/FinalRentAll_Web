@@ -5,7 +5,7 @@ import { useUser } from "../hooks/useUser";
 import { Heart, Menu } from "lucide-react";
 import { useState } from "react";
 
-export default function TopMenu({ activePage }) {
+export default function TopMenu({ activePage, favorites = [] }) {
     const user = useUser();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -23,9 +23,9 @@ export default function TopMenu({ activePage }) {
 
                 {/* Desktop Links */}
                 <div className="hidden md:flex items-center gap-6">
-                    <Button variant="link" className={linkClass("home")}>Home</Button>
-                    <Button variant="link" className={linkClass("inbox")}>Inbox</Button>
-                    <Button variant="link" className={linkClass("notifications")}>Notifications</Button>
+                    <Button variant="link" className={`${linkClass("home")} cursor-pointer`}>Home</Button>
+                    <Button variant="link" className={`${linkClass("inbox")} cursor-pointer`}>Inbox</Button>
+                    <Button variant="link" className={`${linkClass("notifications")} cursor-pointer`}>Notifications</Button>
                 </div>
 
                 {/* Mobile menu button */}
@@ -54,9 +54,16 @@ export default function TopMenu({ activePage }) {
                     placeholder="Search..."
                     className="flex-1 md:flex-none px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring focus:border-blue-500"
                 />
-                <Button variant="ghost">
-                    <Heart className="text-gray-500 w-5 h-5 md:w-6 md:h-6" />
-                </Button>
+                <div className="relative">
+                    <Button variant="ghost">
+                        <Heart className="text-gray-500 w-5 h-5 md:w-6 md:h-6" />
+                    </Button>
+                    {favorites.length > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full px-1">
+                            {favorites.length}
+                        </span>
+                    )}
+                </div>
                 <DropdownMenu>
                     <DropdownMenuTrigger>
                         {user ? (

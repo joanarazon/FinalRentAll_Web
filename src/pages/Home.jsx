@@ -2,9 +2,25 @@ import React from "react";
 import { useUser } from "../hooks/useUser";
 import TopMenu from "../components/topMenu";
 import ItemCard from "../components/ItemCard";
+import { useState } from "react";
 
 function Home() {
     const user = useUser();
+    const [favorites, setFavorites] = useState([]);
+
+    const toggleFavorite = (item) => {
+        setFavorites((prev) => {
+            const exists = prev.some((fav) => fav.title === item.title);
+            if (exists) {
+                // Remove it
+                return prev.filter((fav) => fav.title !== item.title);
+            } else {
+                // Add it
+                return [...prev, item];
+            }
+        });
+    };
+
 
     const items = [
         {
@@ -49,7 +65,7 @@ function Home() {
 
     return (
         <div className="bg-[#FFFBF2] min-h-screen">
-            <TopMenu activePage="home" />
+            <TopMenu activePage="home" favorites={favorites} />
             <div className="flex flex-col md:flex-row gap-4 md:gap-10 mt-10 px-4 md:px-30">
                 <p className="cursor-pointer px-2 py-1 md:px-0 md:py-0">Tools</p>
                 <p className="cursor-pointer px-2 py-1 md:px-0 md:py-0">Car</p>
@@ -62,18 +78,23 @@ function Home() {
             </div>
 
             <div className="flex flex-wrap gap-4 mt-10 px-4 md:px-30">
-                {items.map((item, index) => (
-                    <ItemCard
-                        key={index}
-                        title={item.title}
-                        description={item.description}
-                        ratings={item.ratings}
-                        location={item.location}
-                        date={item.date}
-                        price={item.price}
-                        imageUrl={item.imageUrl}
-                    />
-                ))}
+                {items.map((item, index) => {
+                    const isFavorited = favorites.some((fav) => fav.title === item.title);
+                    return (
+                        <ItemCard
+                            key={index}
+                            title={item.title}
+                            description={item.description}
+                            ratings={item.ratings}
+                            location={item.location}
+                            date={item.date}
+                            price={item.price}
+                            imageUrl={item.imageUrl}
+                            isFavorited={isFavorited}
+                            onHeartClick={() => toggleFavorite(item)}
+                        />
+                    );
+                })}
             </div>
 
             <button
