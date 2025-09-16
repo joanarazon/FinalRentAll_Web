@@ -169,7 +169,7 @@ function Home() {
             </div>
 
             <button
-                className="cursor-pointer fixed bottom-20 left-5 w-16 h-16 bg-[#4F4F4F] text-white text-2xl font-bold rounded-full shadow-lg flex items-center justify-center hover:bg-[#303030] transition"
+                className="cursor-pointer fixed bottom-20 left-5 w-16 h-16 bg-[#4F4F4F] text-white text-xl font-bold rounded-full shadow-lg flex items-center justify-center hover:bg-[#303030] transition"
                 onClick={() => alert("Add product clicked")}
             >
                 +
