@@ -7,6 +7,7 @@ import { useState } from "react";
 function Home() {
     const user = useUser();
     const [favorites, setFavorites] = useState([]);
+    const [selectedCategory, setSelectedCategory] = useState("");
 
     const toggleFavorite = (item) => {
         setFavorites((prev) => {
@@ -20,6 +21,14 @@ function Home() {
             }
         });
     };
+
+    const categories = [
+        "Tools",
+        "Car",
+        "Clothing & Accessories",
+        "Electronics",
+        "Others",
+    ]
 
 
     const items = [
@@ -66,12 +75,34 @@ function Home() {
     return (
         <div className="bg-[#FFFBF2] min-h-screen">
             <TopMenu activePage="home" favorites={favorites} />
-            <div className="flex flex-col md:flex-row gap-4 md:gap-10 mt-10 px-4 md:px-30">
-                <p className="cursor-pointer px-2 py-1 md:px-0 md:py-0">Tools</p>
-                <p className="cursor-pointer px-2 py-1 md:px-0 md:py-0">Car</p>
-                <p className="cursor-pointer px-2 py-1 md:px-0 md:py-0">Clothing & Accessories</p>
-                <p className="cursor-pointer px-2 py-1 md:px-0 md:py-0">Electronics</p>
-                <p className="cursor-pointer px-2 py-1 md:px-0 md:py-0">Others</p>
+            {/* Desktop category menu */}
+            <div className="hidden md:flex flex-row gap-4 md:gap-10 mt-10 px-4 md:px-30">
+                {categories.map((cat) => (
+                    <p
+                        key={cat}
+                        className={`cursor-pointer px-2 py-1 md:px-0 md:py-0 ${selectedCategory === cat ? "font-bold underline" : ""
+                            }`}
+                        onClick={() => setSelectedCategory(cat)}
+                    >
+                        {cat}
+                    </p>
+                ))}
+            </div>
+
+            {/* Mobile dropdown */}
+            <div className="block md:hidden mt-10 px-4">
+                <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2"
+                >
+                    <option value="">Select Category</option>
+                    {categories.map((cat) => (
+                        <option key={cat} value={cat}>
+                            {cat}
+                        </option>
+                    ))}
+                </select>
             </div>
             <div className="flex flex-col md:flex-row gap-4 md:gap-10 mt-10 px-4 md:px-30">
                 <h1 className="text-3xl font-semibold px-2 py-1 md:px-0 md:py-0">Items</h1>
