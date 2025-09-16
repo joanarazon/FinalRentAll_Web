@@ -2,11 +2,13 @@ import React from "react";
 import { useUser } from "../hooks/useUser";
 import TopMenu from "../components/topMenu";
 import ItemCard from "../components/ItemCard";
+import AddItemModal from "../components/AddItemModal";
 import { useState } from "react";
 
 function Home() {
     const user = useUser();
     const [favorites, setFavorites] = useState([]);
+    const [addOpen, setAddOpen] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
 
@@ -30,47 +32,46 @@ function Home() {
         "Clothing & Accessories",
         "Electronics",
         "Others",
-    ]
+    ];
 
-
-    const items = [
+    const [items, setItems] = useState([
         {
             title: "Hammer",
             description: "Tools category",
-            ratings: '5.0',
-            location: 'Igpit-Opol',
-            date: '04-15-2025',
-            price: '100',
-            imageUrl: "https://picsum.photos/400/300?random=1"
+            ratings: "5.0",
+            location: "Igpit-Opol",
+            date: "04-15-2025",
+            price: "100",
+            imageUrl: "https://picsum.photos/400/300?random=1",
         },
         {
             title: "Car Tire",
             description: "Car category",
-            ratings: '4.5',
-            location: 'CDO City',
-            date: '04-12-2025',
-            price: '150',
-            imageUrl: "https://picsum.photos/400/300?random=2"
+            ratings: "4.5",
+            location: "CDO City",
+            date: "04-12-2025",
+            price: "150",
+            imageUrl: "https://picsum.photos/400/300?random=2",
         },
         {
             title: "T-Shirt",
             description: "Clothing category",
-            ratings: '4.8',
-            location: 'City Mall',
-            date: '04-10-2025',
-            price: '25',
-            imageUrl: "https://picsum.photos/400/300?random=3"
+            ratings: "4.8",
+            location: "City Mall",
+            date: "04-10-2025",
+            price: "25",
+            imageUrl: "https://picsum.photos/400/300?random=3",
         },
         {
             title: "Headphones",
             description: "Electronics category",
-            ratings: '4.9',
-            location: 'Gaisano Mall',
-            date: '04-18-2025',
-            price: '80',
-            imageUrl: "https://picsum.photos/400/300?random=4"
+            ratings: "4.9",
+            location: "Gaisano Mall",
+            date: "04-18-2025",
+            price: "80",
+            imageUrl: "https://picsum.photos/400/300?random=4",
         },
-    ];
+    ]);
 
     if (!user) return <p>Loading...</p>;
 
@@ -87,8 +88,11 @@ function Home() {
                 {categories.map((cat) => (
                     <p
                         key={cat}
-                        className={`cursor-pointer px-2 py-1 md:px-0 md:py-0 ${selectedCategory === cat ? "font-bold underline" : ""
-                            }`}
+                        className={`cursor-pointer px-2 py-1 md:px-0 md:py-0 ${
+                            selectedCategory === cat
+                                ? "font-bold underline"
+                                : ""
+                        }`}
                         onClick={() => setSelectedCategory(cat)}
                     >
                         {cat}
@@ -118,7 +122,9 @@ function Home() {
             </div>
 
             <div className="flex flex-col md:flex-row gap-4 md:gap-10 mt-10 px-4 md:px-30">
-                <h1 className="text-3xl font-semibold px-2 py-1 md:px-0 md:py-0">Items</h1>
+                <h1 className="text-3xl font-semibold px-2 py-1 md:px-0 md:py-0">
+                    Items
+                </h1>
             </div>
 
             <div className="flex flex-wrap gap-4 mt-10 px-4 md:px-30">
@@ -127,16 +133,26 @@ function Home() {
                     const filteredItems = items.filter((item) => {
                         // Category filter
                         if (selectedCategory && selectedCategory !== "All") {
-                            if (!item.description.toLowerCase().includes(selectedCategory.toLowerCase())) {
+                            if (
+                                !item.description
+                                    .toLowerCase()
+                                    .includes(selectedCategory.toLowerCase())
+                            ) {
                                 return false;
                             }
                         }
                         // Search filter
                         if (searchTerm) {
                             return (
-                                item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                item.location.toLowerCase().includes(searchTerm.toLowerCase())
+                                item.title
+                                    .toLowerCase()
+                                    .includes(searchTerm.toLowerCase()) ||
+                                item.description
+                                    .toLowerCase()
+                                    .includes(searchTerm.toLowerCase()) ||
+                                item.location
+                                    .toLowerCase()
+                                    .includes(searchTerm.toLowerCase())
                             );
                         }
                         return true;
@@ -144,12 +160,18 @@ function Home() {
 
                     // If no items match, show message
                     if (filteredItems.length === 0) {
-                        return <p className="text-gray-500 text-lg">No Item Found</p>;
+                        return (
+                            <p className="text-gray-500 text-lg">
+                                No Item Found
+                            </p>
+                        );
                     }
 
                     // Otherwise, render the cards
                     return filteredItems.map((item, index) => {
-                        const isFavorited = favorites.some((fav) => fav.title === item.title);
+                        const isFavorited = favorites.some(
+                            (fav) => fav.title === item.title
+                        );
                         return (
                             <ItemCard
                                 key={index}
@@ -170,10 +192,28 @@ function Home() {
 
             <button
                 className="cursor-pointer fixed bottom-20 left-5 w-16 h-16 bg-[#4F4F4F] text-white text-xl font-bold rounded-full shadow-lg flex items-center justify-center hover:bg-[#303030] transition"
-                onClick={() => alert("Add product clicked")}
+                onClick={() => setAddOpen(true)}
             >
                 +
             </button>
+
+            <AddItemModal
+                open={addOpen}
+                onOpenChange={setAddOpen}
+                userId={user?.id}
+                onCreated={(newItem) => {
+                    const card = {
+                        title: newItem.title,
+                        description: newItem.description || "",
+                        ratings: "5.0",
+                        location: newItem.location || "",
+                        date: new Date().toLocaleDateString(),
+                        price: String(newItem.price_per_day),
+                        imageUrl: newItem.imageUrl || undefined,
+                    };
+                    setItems((prev) => [card, ...prev]);
+                }}
+            />
         </div>
     );
 }
