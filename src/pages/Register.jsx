@@ -89,13 +89,13 @@ function Register() {
         }, "image/jpeg");
     };
 
-    // Compare with Face++
+    // Compare with Face++ and return boolean for match
     const compareFaces = async () => {
         const formDataData = new FormData();
         formDataData.append("api_key", "W9-sl3ggHVQ2DsAuGh8abK4GJe-6LWY7");
         formDataData.append("api_secret", "IKs0rowIo3yVqLB8FS3kpOkpFhJ3qTt3");
-        formDataData.append("image_file1", formData.idImage); // ID from Step 1
-        formDataData.append("image_file2", capturedImage); // Selfie
+        formDataData.append("image_file1", formData.idImage);
+        formDataData.append("image_file2", capturedImage);
 
         const res = await fetch(
             "https://api-us.faceplusplus.com/facepp/v3/compare",
@@ -108,11 +108,15 @@ function Register() {
         const data = await res.json();
         console.log("Face++ result:", data);
 
-        if (data.confidence > 80) {
-            setResult("✅ Face matched with ID");
-        } else {
-            setResult("❌ Face does not match");
-        }
+        const matched = !!(
+            data &&
+            typeof data.confidence === "number" &&
+            data.confidence > 80
+        );
+        setResult(
+            matched ? "✅ Face matched with ID" : "❌ Face does not match"
+        );
+        return matched;
     };
 
     const [formData, setFormData] = useState({
@@ -163,7 +167,6 @@ function Register() {
                 alert("Please enter your email first.");
                 return;
             }
-            // Basic password validation before proceeding
             if (!formData.password || !formData.confirmPassword) {
                 alert("Please enter and confirm your password.");
                 return;
@@ -176,15 +179,13 @@ function Register() {
                 alert("Password must be at least 8 characters.");
                 return;
             }
-            // Send OTP to email
+
             const { error } = await supabase.auth.signInWithOtp({
                 email: formData.email,
                 options: {
                     shouldCreateUser: true,
-                    // DO NOT include emailRedirectTo → that’s only for magic link
                 },
             });
-
             if (error) {
                 console.error(error.message);
                 alert("Failed to send OTP: " + error.message);
@@ -192,69 +193,67 @@ function Register() {
             }
             console.log("OTP sent to", formData.email);
             setStep(2);
-        } else if (step === 2) {
+            return;
+        }
+
+        if (step === 2) {
             if (!formData.otp) {
                 alert("Please enter the OTP.");
                 return;
             }
 
-            // const { data: { session }, error } = await supabase.auth.verifyOtp({
-            //     email: formData.email,   // email entered at step 1
-            //     token: formData.otp,     // OTP from InputOTP
-            //     type: "email",
-            // });
-
-            // if (error) {
-            //     console.error(error.message);
-            //     alert("Invalid OTP: " + error.message);
-            //     return;
-            // }
-
-            console.log("OTP input collected, moving to Step 3");
+            const {
+                data: { session },
+                error,
+            } = await supabase.auth.verifyOtp({
+                email: formData.email,
+                token: formData.otp,
+                type: "email",
+            });
+            if (error) {
+                console.error(error.message);
+                alert("Invalid or expired OTP: " + error.message);
+                return;
+            }
+            console.log("OTP verified, session established:", session);
             setStep(3);
-        } else if (step === 3) {
-            // Step 3: Face++ verification first
+            return;
+        }
+
+        if (step === 3) {
             if (!capturedImage) {
                 alert("Please capture your selfie first.");
                 return;
             }
 
-            // Compare faces
-            await compareFaces();
-
-            if (!result?.includes("✅")) {
+            const faceOk = await compareFaces();
+            if (!faceOk) {
                 alert("Face verification failed!");
                 return;
             }
 
             try {
-                // ✅ Face matched, now verify OTP in Supabase Auth
-                const {
-                    data: { session },
-                    error: otpError,
-                } = await supabase.auth.verifyOtp({
-                    email: formData.email,
-                    token: formData.otp,
-                    type: "email",
-                });
-
-                if (otpError) {
-                    console.error(otpError.message);
-                    alert("OTP verification failed: " + otpError.message);
+                const { error: updatePasswordError } =
+                    await supabase.auth.updateUser({
+                        password: formData.password,
+                    });
+                if (updatePasswordError) {
+                    console.error(updatePasswordError.message);
+                    alert(
+                        "Failed to set password: " + updatePasswordError.message
+                    );
                     return;
                 }
 
-                console.log("OTP verified & user logged in!", session);
-
-                // ✅ Set the user's password in Supabase Auth now that they're authenticated
-                const { error: updateError } = await supabase.auth.updateUser({
-                    password: formData.password,
-                });
-                if (updateError) {
-                    console.error(updateError.message);
-                    alert("Failed to set password: " + updateError.message);
+                // Get current authenticated user for FK id
+                const { data: userData, error: userErr } =
+                    await supabase.auth.getUser();
+                if (userErr || !userData?.user) {
+                    console.error(userErr?.message || "No user in session");
+                    alert("Missing authenticated user. Please retry OTP.");
                     return;
                 }
+                const userId = userData.user.id;
 
                 // Upload ID image
                 let idImageUrl = null;
@@ -299,16 +298,21 @@ function Register() {
                     .from("users")
                     .insert([
                         {
+                            id: userId,
                             first_name: formData.firstName,
                             last_name: formData.lastName,
-                            // password: formData.password,
-                            email: formData.email,
                             phone: formData.phone,
                             dob: formData.dob
-                                ? formData.dob.toISOString()
+                                ? formData.dob.toISOString().split("T")[0]
                                 : null,
-                            location_lat: location.lat,
-                            location_lng: location.lng,
+                            location_lat:
+                                location.lat != null
+                                    ? String(location.lat)
+                                    : null,
+                            location_lng:
+                                location.lng != null
+                                    ? String(location.lng)
+                                    : null,
                             id_image_url: idImageUrl,
                             face_image_url: faceImageUrl,
                             face_verified: true,
