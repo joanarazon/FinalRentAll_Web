@@ -6,6 +6,9 @@ import Home from './pages/Home';
 import Inbox from './pages/Inbox';
 import Notification from './pages/Notification';
 import AdminHome from './pages/admin/AdminHome';
+import PendingUser from './pages/admin/pages/PendingUser';
+import PendingItems from './pages/admin/pages/PendingItems';
+import ViewRentingHistory from './pages/admin/pages/ViewRentingHistory';
 
 export default class App extends Component {
   render() {
@@ -18,6 +21,9 @@ export default class App extends Component {
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/notifications" element={<Notification />} />
           <Route path="/adminhome" element={<AdminHome />} />
+          <Route path="/pending-users" element={<PendingUser />} />
+          <Route path="/pending-items" element={<PendingItems />} />
+          <Route path="/renting-history" element={<ViewRentingHistory />} />
         </Routes>
       </Router>
     );
