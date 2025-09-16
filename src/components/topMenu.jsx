@@ -10,7 +10,7 @@ export default function TopMenu() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="bg-[#FCF1E3] shadow-md px-4 py-3 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-0">
+    <div className="bg-[#FFFBF2] shadow-md px-4 py-3 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-0">
       
       {/* Left: Logo + Links */}
       <div className="flex items-center justify-between md:justify-start gap-3 md:gap-6 w-full md:w-auto">
@@ -51,7 +51,7 @@ export default function TopMenu() {
         />
 
         <Button variant="ghost">
-          <Heart className="text-red-500 w-5 h-5 md:w-6 md:h-6" />
+          <Heart className="text-gray-500 w-5 h-5 md:w-6 md:h-6" />
         </Button>
 
         <DropdownMenu>
