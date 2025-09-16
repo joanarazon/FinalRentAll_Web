@@ -8,6 +8,7 @@ function Home() {
     const user = useUser();
     const [favorites, setFavorites] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState("");
+    const [searchTerm, setSearchTerm] = useState("");
 
     const toggleFavorite = (item) => {
         setFavorites((prev) => {
@@ -23,6 +24,7 @@ function Home() {
     };
 
     const categories = [
+        "All",
         "Tools",
         "Car",
         "Clothing & Accessories",
@@ -74,7 +76,12 @@ function Home() {
 
     return (
         <div className="bg-[#FFFBF2] min-h-screen">
-            <TopMenu activePage="home" favorites={favorites} />
+            <TopMenu
+                activePage="home"
+                favorites={favorites}
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+            />
             {/* Desktop category menu */}
             <div className="hidden md:flex flex-row gap-4 md:gap-10 mt-10 px-4 md:px-30">
                 {categories.map((cat) => (
@@ -90,11 +97,11 @@ function Home() {
             </div>
 
             {/* Mobile dropdown */}
-            <div className="block md:hidden mt-10 px-4">
+            <div className="relative block md:hidden mt-10 px-4">
                 <select
                     value={selectedCategory}
                     onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2"
+                    className="w-full border rounded-lg px-3 py-2 pr-8 appearance-none"
                 >
                     <option value="">Select Category</option>
                     {categories.map((cat) => (
@@ -103,29 +110,62 @@ function Home() {
                         </option>
                     ))}
                 </select>
+
+                {/* Custom arrow */}
+                <span className="pointer-events-none absolute right-10 top-1/2 -translate-y-1/2 text-gray-500">
+                    ▼
+                </span>
             </div>
+
             <div className="flex flex-col md:flex-row gap-4 md:gap-10 mt-10 px-4 md:px-30">
                 <h1 className="text-3xl font-semibold px-2 py-1 md:px-0 md:py-0">Items</h1>
             </div>
 
             <div className="flex flex-wrap gap-4 mt-10 px-4 md:px-30">
-                {items.map((item, index) => {
-                    const isFavorited = favorites.some((fav) => fav.title === item.title);
-                    return (
-                        <ItemCard
-                            key={index}
-                            title={item.title}
-                            description={item.description}
-                            ratings={item.ratings}
-                            location={item.location}
-                            date={item.date}
-                            price={item.price}
-                            imageUrl={item.imageUrl}
-                            isFavorited={isFavorited}
-                            onHeartClick={() => toggleFavorite(item)}
-                        />
-                    );
-                })}
+                {(() => {
+                    // Filter items first
+                    const filteredItems = items.filter((item) => {
+                        // Category filter
+                        if (selectedCategory && selectedCategory !== "All") {
+                            if (!item.description.toLowerCase().includes(selectedCategory.toLowerCase())) {
+                                return false;
+                            }
+                        }
+                        // Search filter
+                        if (searchTerm) {
+                            return (
+                                item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                item.location.toLowerCase().includes(searchTerm.toLowerCase())
+                            );
+                        }
+                        return true;
+                    });
+
+                    // If no items match, show message
+                    if (filteredItems.length === 0) {
+                        return <p className="text-gray-500 text-lg">No Item Found</p>;
+                    }
+
+                    // Otherwise, render the cards
+                    return filteredItems.map((item, index) => {
+                        const isFavorited = favorites.some((fav) => fav.title === item.title);
+                        return (
+                            <ItemCard
+                                key={index}
+                                title={item.title}
+                                description={item.description}
+                                ratings={item.ratings}
+                                location={item.location}
+                                date={item.date}
+                                price={item.price}
+                                imageUrl={item.imageUrl}
+                                isFavorited={isFavorited}
+                                onHeartClick={() => toggleFavorite(item)}
+                            />
+                        );
+                    });
+                })()}
             </div>
 
             <button

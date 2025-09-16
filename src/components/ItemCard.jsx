@@ -21,7 +21,7 @@ function ItemCard({ title, description, ratings, location, date, price, imageUrl
                     <Button
                         variant="ghost"
                         onClick={onHeartClick}
-                        className={isFavorited ? "bg-red-100" : ""}
+                        className={isFavorited ? "bg-red-100 cursor-pointer" : "cursor-pointer"}
                     >
                         <Heart className={`${isFavorited ? "text-red-500 fill-red-500" : "text-gray-500"}`} />
                     </Button>

@@ -5,7 +5,7 @@ import { useUser } from "../hooks/useUser";
 import { Heart, Menu } from "lucide-react";
 import { useState } from "react";
 
-export default function TopMenu({ activePage, favorites = [] }) {
+export default function TopMenu({ activePage, favorites = [], searchTerm, setSearchTerm }) {
     const user = useUser();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -52,6 +52,8 @@ export default function TopMenu({ activePage, favorites = [] }) {
                 <input
                     type="text"
                     placeholder="Search..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                     className="flex-1 md:flex-none px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring focus:border-blue-500"
                 />
                 <div className="relative">
