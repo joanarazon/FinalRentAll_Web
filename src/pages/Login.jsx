@@ -45,6 +45,16 @@ function Login() {
                 .maybeSingle();
             if (profileError) throw profileError;
 
+            // Check role before proceeding
+            if (!profile?.role) {
+                throw new Error("No role assigned to this account");
+            }
+
+            if (profile.role === "unverified") {
+                alert("Your account is not permitted to login yet.");
+                return; // stop here, don't navigate
+            }
+
             // Store combined auth + profile in localStorage (omit sensitive fields; none here)
             const session = signInData.session;
             const userInfo = {
@@ -57,7 +67,14 @@ function Login() {
             const greetingName =
                 profile?.first_name || authUser.email || "there";
             alert(`Welcome back, ${greetingName}!`);
-            navigate("/home");
+            // Navigate based on role
+            if (profile.role === "admin") {
+                navigate("/adminhome");
+            } else if (profile.role === "user") {
+                navigate("/home");
+            } else {
+                alert("Unknown role — cannot log in.");
+            }
         } catch (err) {
             console.error("Login error:", err.message);
             alert("Something went wrong: " + err.message);
@@ -124,6 +141,16 @@ function Login() {
                 .maybeSingle();
             if (profileError) throw profileError;
 
+            // Check role before proceeding
+            if (!profile?.role) {
+                throw new Error("No role assigned to this account");
+            }
+
+            if (profile.role === "unverified") {
+                alert("Your account is not permitted to login yet.");
+                return; // stop here, don't navigate
+            }
+
             const userInfo = {
                 id: userId,
                 email: userEmail,
@@ -132,7 +159,13 @@ function Login() {
             localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
 
             alert("Signed in successfully with email OTP");
-            navigate("/home");
+            if (profile.role === "admin") {
+                navigate("/adminhome");
+            } else if (profile.role === "user") {
+                navigate("/home");
+            } else {
+                alert("Unknown role — cannot log in.");
+            }
         } catch (err) {
             console.error("OTP verify error:", err.message);
             alert("Failed to verify OTP: " + err.message);
@@ -166,11 +199,10 @@ function Login() {
                         <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
                             <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
-                                    loginMethod === "password"
-                                        ? "bg-[#1e1e1e] text-white shadow"
-                                        : "text-gray-700 hover:bg-gray-200"
-                                }`}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "password"
+                                    ? "bg-[#1e1e1e] text-white shadow"
+                                    : "text-gray-700 hover:bg-gray-200"
+                                    }`}
                                 onClick={() => setLoginMethod("password")}
                             >
                                 <Lock size={16} />
@@ -178,11 +210,10 @@ function Login() {
                             </button>
                             <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
-                                    loginMethod === "email_otp"
-                                        ? "bg-[#1e1e1e] text-white shadow"
-                                        : "text-gray-700 hover:bg-gray-200"
-                                }`}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "email_otp"
+                                    ? "bg-[#1e1e1e] text-white shadow"
+                                    : "text-gray-700 hover:bg-gray-200"
+                                    }`}
                                 onClick={() => setLoginMethod("email_otp")}
                             >
                                 <Mail size={16} />
@@ -190,11 +221,10 @@ function Login() {
                             </button>
                             <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
-                                    loginMethod === "sms_otp"
-                                        ? "bg-[#1e1e1e] text-white shadow"
-                                        : "text-gray-700 hover:bg-gray-200"
-                                }`}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "sms_otp"
+                                    ? "bg-[#1e1e1e] text-white shadow"
+                                    : "text-gray-700 hover:bg-gray-200"
+                                    }`}
                                 onClick={() => setLoginMethod("sms_otp")}
                             >
                                 <Phone size={16} />
@@ -205,17 +235,17 @@ function Login() {
                         {/* Email (shared for password and email OTP) */}
                         {(loginMethod === "password" ||
                             loginMethod === "email_otp") && (
-                            <div className="mb-4">
-                                <input
-                                    className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400 mb-1"
-                                    id="email"
-                                    type="email"
-                                    placeholder="Enter email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                />
-                            </div>
-                        )}
+                                <div className="mb-4">
+                                    <input
+                                        className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400 mb-1"
+                                        id="email"
+                                        type="email"
+                                        placeholder="Enter email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                    />
+                                </div>
+                            )}
 
                         {/* Password login */}
                         {loginMethod === "password" && (
