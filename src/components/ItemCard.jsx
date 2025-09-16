@@ -36,8 +36,8 @@ function ItemCard({ title, description, ratings, location, date, price, imageUrl
                     {date && <p>{date}</p>}
                     <div className="flex flex-row justify-between">
                         {price && <p className="text-[#FFAB00] font-bold text-xl">₱{price}/day</p>}
-                        <Button>
-                            <p className='cursor-pointer'>Rent Now</p>
+                        <Button className='cursor-pointer'>
+                            <p>Rent Now</p>
                         </Button>
                     </div>
                 </div>
