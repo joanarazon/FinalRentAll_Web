@@ -19,7 +19,7 @@ export default function TopMenu({ activePage, favorites = [] }) {
         <div className="bg-[#FFFBF2] shadow-md px-4 py-3 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-0">
             {/* Left: Logo + Links */}
             <div className="flex items-center justify-between md:justify-start gap-3 md:gap-6 w-full md:w-auto">
-                <h1 className="text-xl font-bold">RentAll</h1>
+                <h1 className="text-xl font-bold cursor-pointer">RentAll</h1>
 
                 {/* Desktop Links */}
                 <div className="hidden md:flex items-center gap-6">
@@ -67,9 +67,9 @@ export default function TopMenu({ activePage, favorites = [] }) {
                 <DropdownMenu>
                     <DropdownMenuTrigger>
                         {user ? (
-                            <Avatar>
+                            <Avatar className="cursor-pointer">
                                 <AvatarImage src={user.face_image_url} alt="Profile" />
-                                <AvatarFallback>
+                                <AvatarFallback className="cursor-pointer">
                                     {user.first_name?.[0]}{user.last_name?.[0]}
                                 </AvatarFallback>
                             </Avatar>
