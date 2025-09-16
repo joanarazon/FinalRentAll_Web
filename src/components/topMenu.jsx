@@ -60,7 +60,7 @@ export default function TopMenu({ activePage, favorites = [], searchTerm, setSea
 
             {/* Mobile links */}
             {mobileMenuOpen && (
-                <div className="flex flex-col gap-2 md:hidden mt-2">
+                <div className="flex flex-row gap-2 md:hidden mt-2">
                     <Button variant="link" className={`${linkClass("home")} cursor-pointer`} onClick={handleHome}>Home</Button>
                     <Button
                         variant="link"

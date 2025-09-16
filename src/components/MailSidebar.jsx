@@ -16,8 +16,6 @@ export default function MailSidebar({ activePage }) {
         <nav className="flex flex-col p-4 gap-2">
           <p className="mb-5">Messages</p>
           <Button variant="ghost" className={linkClass("inbox")}>Inbox</Button>
-          <Button variant="ghost" className={linkClass("sent")}>Sent</Button>
-          <Button variant="ghost" className={linkClass("drafts")}>Drafts</Button>
         </nav>
       </ScrollArea>
     </aside>
