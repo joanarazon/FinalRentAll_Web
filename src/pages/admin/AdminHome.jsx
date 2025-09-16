@@ -1,11 +1,16 @@
-import { useUser } from "../../hooks/useUser"
+// src/pages/AdminHome.jsx
+import React from "react";
+import { useUser } from "../../hooks/useUser";
+import AdminLayout from "../../components/AdminLayout";
 
-function AdminHome() {
+export default function AdminHome() {
     const user = useUser();
+
     return (
-        <p>{user?.first_name}</p>
-    )
-
+        <>
+            <AdminLayout>
+                <p>{user?.first_name} Dashboard</p>
+            </AdminLayout>
+        </>
+    );
 }
-
-export default AdminHome
