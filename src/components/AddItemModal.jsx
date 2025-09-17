@@ -59,11 +59,9 @@ export default function AddItemModal({
         }
         try {
             setLoading(true);
-            const itemId = crypto.randomUUID();
 
-            // Step 1: Insert item first
-            const payload = {
-                item_id: itemId,
+            // Step 1: Insert item; let DB generate item_id (default gen_random_uuid())
+            const basePayload = {
                 user_id: userId,
                 title: form.title.trim(),
                 description: form.description.trim() || null,
@@ -74,18 +72,21 @@ export default function AddItemModal({
                 location: form.location.trim() || null,
                 available: !!form.available,
                 category_id: form.category_id ? Number(form.category_id) : null,
-                main_image_url: null, // will be updated if upload succeeds
+                main_image_url: null,
             };
 
-            const { error: insertErr } = await supabase
+            const { data: inserted, error: insertErr } = await supabase
                 .from("items")
-                .insert([payload]);
+                .insert([basePayload])
+                .select("item_id")
+                .single();
             if (insertErr) throw insertErr;
+            const itemId = inserted?.item_id;
 
             let publicUrl = null;
 
             // Step 2: If image provided, upload to Storage
-            if (imageFile) {
+            if (imageFile && itemId) {
                 const path = `${userId}/${itemId}/${Date.now()}-${
                     imageFile.name
                 }`;
@@ -103,7 +104,6 @@ export default function AddItemModal({
                         .getPublicUrl(path);
                     publicUrl = pub?.publicUrl || null;
 
-                    // Step 3: Update the item with image URL
                     if (publicUrl) {
                         const { error: updateErr } = await supabase
                             .from("items")
@@ -119,10 +119,10 @@ export default function AddItemModal({
                 }
             }
 
-            // Step 4: Callback + UI reset
+            // Step 3: Callback + UI reset
             onCreated?.({
                 item_id: itemId,
-                ...payload,
+                ...basePayload,
                 main_image_url: publicUrl,
             });
             alert(
