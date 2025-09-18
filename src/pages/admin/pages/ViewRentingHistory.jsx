@@ -53,7 +53,7 @@ function ViewRentingHistory() {
   ];
 
   return (
-    <AdminLayout className="bg-[#FFFBF2] min-h-screen p-6">
+    <AdminLayout className="bg-[#FFFBF2] min-h-screen">
       {/* Page Title */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800">
