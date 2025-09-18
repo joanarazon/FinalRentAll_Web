@@ -151,11 +151,15 @@ export default function AddItemModal({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="w-full sm:max-w-md">
+            <SheetContent
+                side="right"
+                className="w-full sm:max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl"
+            >
                 <SheetHeader>
                     <SheetTitle>Add Product</SheetTitle>
                 </SheetHeader>
-                <div className="p-4 flex flex-col gap-3">
+                {/* Scrollable content area */}
+                <div className="flex-1 overflow-y-auto px-4 pb-4 flex flex-col gap-3 min-h-0">
                     <label className="text-sm">
                         Title<span className="text-red-500">*</span>
                     </label>
@@ -253,7 +257,7 @@ export default function AddItemModal({
                         </p>
                     )}
                 </div>
-                <SheetFooter>
+                <SheetFooter className="border-t bg-white/60 backdrop-blur supports-[backdrop-filter]:bg-white/40 sticky bottom-0">
                     <Button
                         variant="outline"
                         className="cursor-pointer"

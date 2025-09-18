@@ -65,17 +65,45 @@ function Home() {
     const fetchItems = useCallback(async () => {
         setLoading(true);
         try {
+            // First attempt: include item_status and filter to approved.
+            let baseSelect =
+                "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,available,created_at,item_status";
             let query = supabase
                 .from("items")
-                .select(
-                    "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,available,created_at"
-                )
+                .select(baseSelect)
                 .eq("available", true)
+                .eq("item_status", "approved")
                 .order("created_at", { ascending: false });
             if (selectedCategoryId) {
                 query = query.eq("category_id", Number(selectedCategoryId));
             }
-            const { data, error } = await query;
+            let { data, error } = await query;
+
+            // Fallback if item_status column does not exist (Postgres undefined column error code 42703)
+            if (
+                error &&
+                (error.code === "42703" || /item_status/i.test(error.message))
+            ) {
+                console.warn(
+                    "item_status column missing; showing all available items."
+                );
+                let fallbackQuery = supabase
+                    .from("items")
+                    .select(
+                        "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,available,created_at"
+                    )
+                    .eq("available", true)
+                    .order("created_at", { ascending: false });
+                if (selectedCategoryId) {
+                    fallbackQuery = fallbackQuery.eq(
+                        "category_id",
+                        Number(selectedCategoryId)
+                    );
+                }
+                const fallback = await fallbackQuery;
+                data = fallback.data;
+                error = fallback.error;
+            }
             if (error) throw error;
 
             const withImages = await Promise.all(

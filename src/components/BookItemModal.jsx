@@ -150,11 +150,14 @@ export default function BookItemModal({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="w-full sm:max-w-2xl">
+            <SheetContent
+                side="right"
+                className="w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl"
+            >
                 <SheetHeader>
                     <SheetTitle>Rent "{item?.title}"</SheetTitle>
                 </SheetHeader>
-                <div className="p-4">
+                <div className="flex-1 overflow-y-auto p-4 min-h-0">
                     <div className="flex flex-col md:flex-row gap-4 md:gap-6">
                         {imageUrl && (
                             <img
@@ -304,7 +307,7 @@ export default function BookItemModal({
                         </div>
                     </div>
                 </div>
-                <SheetFooter>
+                <SheetFooter className="border-t bg-white/60 backdrop-blur supports-[backdrop-filter]:bg-white/40 sticky bottom-0">
                     <Button
                         variant="outline"
                         className="cursor-pointer"
