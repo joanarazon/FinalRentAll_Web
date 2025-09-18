@@ -1,8 +1,9 @@
 import rentLogo from "../assets/rent.png";
 import { useState } from "react";
-import { Lock, Mail, Phone } from "lucide-react";
+import { Lock, Mail, Phone, Loader2 } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 import { useNavigate } from "react-router-dom";
+import { useToastApi } from "../components/ui/toast";
 
 function Login() {
     const [email, setEmail] = useState("");
@@ -13,10 +14,11 @@ function Login() {
     const [smsPhone, setSmsPhone] = useState("");
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const toast = useToastApi();
 
     const handlePasswordLogin = async () => {
         if (!email || !password) {
-            alert("Please enter both email and password");
+            toast.error("Please enter both email and password");
             return;
         }
 
@@ -51,7 +53,7 @@ function Login() {
             }
 
             if (profile.role === "unverified") {
-                alert("Your account is not permitted to login yet.");
+                toast.info("Your account is pending admin verification.");
                 return; // stop here, don't navigate
             }
 
@@ -66,18 +68,18 @@ function Login() {
 
             const greetingName =
                 profile?.first_name || authUser.email || "there";
-            alert(`Welcome back, ${greetingName}!`);
+            toast.success(`Welcome back, ${greetingName}!`);
             // Navigate based on role
             if (profile.role === "admin") {
                 navigate("/adminhome");
             } else if (profile.role === "user") {
                 navigate("/home");
             } else {
-                alert("Unknown role — cannot log in.");
+                toast.error("Unknown role — cannot log in.");
             }
         } catch (err) {
             console.error("Login error:", err.message);
-            alert("Something went wrong: " + err.message);
+            toast.error("Login failed: " + err.message);
         } finally {
             setLoading(false);
         }
@@ -85,7 +87,7 @@ function Login() {
 
     const sendEmailOtp = async () => {
         if (!email) {
-            alert("Please enter your email");
+            toast.error("Please enter your email");
             return;
         }
         try {
@@ -96,10 +98,10 @@ function Login() {
             });
             if (error) throw error;
             setEmailOtpSent(true);
-            alert(`OTP sent to ${email}`);
+            toast.success(`OTP sent to ${email}`);
         } catch (err) {
             console.error("OTP send error:", err.message);
-            alert("Failed to send OTP: " + err.message);
+            toast.error("Failed to send OTP: " + err.message);
         } finally {
             setLoading(false);
         }
@@ -107,7 +109,7 @@ function Login() {
 
     const verifyEmailOtp = async () => {
         if (!email || !emailOtpCode) {
-            alert("Enter your email and OTP code");
+            toast.error("Enter your email and OTP code");
             return;
         }
         try {
@@ -147,7 +149,7 @@ function Login() {
             }
 
             if (profile.role === "unverified") {
-                alert("Your account is not permitted to login yet.");
+                toast.info("Your account is pending admin verification.");
                 return; // stop here, don't navigate
             }
 
@@ -158,17 +160,17 @@ function Login() {
             };
             localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
 
-            alert("Signed in successfully with email OTP");
+            toast.success("Signed in successfully with email OTP");
             if (profile.role === "admin") {
                 navigate("/adminhome");
             } else if (profile.role === "user") {
                 navigate("/home");
             } else {
-                alert("Unknown role — cannot log in.");
+                toast.error("Unknown role — cannot log in.");
             }
         } catch (err) {
             console.error("OTP verify error:", err.message);
-            alert("Failed to verify OTP: " + err.message);
+            toast.error("Failed to verify OTP: " + err.message);
         } finally {
             setLoading(false);
         }
@@ -199,10 +201,11 @@ function Login() {
                         <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
                             <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "password"
-                                    ? "bg-[#1e1e1e] text-white shadow"
-                                    : "text-gray-700 hover:bg-gray-200"
-                                    }`}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
+                                    loginMethod === "password"
+                                        ? "bg-[#1e1e1e] text-white shadow"
+                                        : "text-gray-700 hover:bg-gray-200"
+                                }`}
                                 onClick={() => setLoginMethod("password")}
                             >
                                 <Lock size={16} />
@@ -210,10 +213,11 @@ function Login() {
                             </button>
                             <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "email_otp"
-                                    ? "bg-[#1e1e1e] text-white shadow"
-                                    : "text-gray-700 hover:bg-gray-200"
-                                    }`}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
+                                    loginMethod === "email_otp"
+                                        ? "bg-[#1e1e1e] text-white shadow"
+                                        : "text-gray-700 hover:bg-gray-200"
+                                }`}
                                 onClick={() => setLoginMethod("email_otp")}
                             >
                                 <Mail size={16} />
@@ -221,10 +225,11 @@ function Login() {
                             </button>
                             <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "sms_otp"
-                                    ? "bg-[#1e1e1e] text-white shadow"
-                                    : "text-gray-700 hover:bg-gray-200"
-                                    }`}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
+                                    loginMethod === "sms_otp"
+                                        ? "bg-[#1e1e1e] text-white shadow"
+                                        : "text-gray-700 hover:bg-gray-200"
+                                }`}
                                 onClick={() => setLoginMethod("sms_otp")}
                             >
                                 <Phone size={16} />
@@ -235,17 +240,17 @@ function Login() {
                         {/* Email (shared for password and email OTP) */}
                         {(loginMethod === "password" ||
                             loginMethod === "email_otp") && (
-                                <div className="mb-4">
-                                    <input
-                                        className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400 mb-1"
-                                        id="email"
-                                        type="email"
-                                        placeholder="Enter email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                    />
-                                </div>
-                            )}
+                            <div className="mb-4">
+                                <input
+                                    className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400 mb-1"
+                                    id="email"
+                                    type="email"
+                                    placeholder="Enter email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                />
+                            </div>
+                        )}
 
                         {/* Password login */}
                         {loginMethod === "password" && (
@@ -272,12 +277,15 @@ function Login() {
                                 </div>
                                 <div className="items-center justify-between mt-5">
                                     <button
-                                        className="bg-[#1e1e1e] hover:bg-[#F09B35] cursor-pointer text-white font-bold py-2 px-4 border rounded-lg w-full focus:outline-none focus:shadow-outline disabled:opacity-50"
+                                        className="bg-[#1e1e1e] hover:bg-[#F09B35] cursor-pointer text-white font-bold py-2 px-4 border rounded-lg w-full focus:outline-none focus:shadow-outline disabled:opacity-50 flex items-center justify-center gap-2"
                                         type="button"
                                         onClick={handlePasswordLogin}
                                         disabled={loading}
                                     >
-                                        {loading ? "Signing In..." : "Sign In"}
+                                        {loading && (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        )}
+                                        {loading ? "Signing In" : "Sign In"}
                                     </button>
                                 </div>
                             </>
@@ -289,13 +297,16 @@ function Login() {
                                 {!emailOtpSent ? (
                                     <div className="items-center justify-between mt-2">
                                         <button
-                                            className="bg-[#1e1e1e] hover:bg-[#F09B35] cursor-pointer text-white font-bold py-2 px-4 border rounded-lg w-full focus:outline-none focus:shadow-outline disabled:opacity-50"
+                                            className="bg-[#1e1e1e] hover:bg-[#F09B35] cursor-pointer text-white font-bold py-2 px-4 border rounded-lg w-full focus:outline-none focus:shadow-outline disabled:opacity-50 flex items-center justify-center gap-2"
                                             type="button"
                                             onClick={sendEmailOtp}
                                             disabled={loading}
                                         >
+                                            {loading && (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            )}
                                             {loading
-                                                ? "Sending OTP..."
+                                                ? "Sending OTP"
                                                 : "Send OTP"}
                                         </button>
                                     </div>
@@ -319,13 +330,16 @@ function Login() {
                                         </div>
                                         <div className="flex gap-2">
                                             <button
-                                                className="flex-1 bg-[#1e1e1e] hover:bg-[#F09B35] cursor-pointer text-white font-bold py-2 px-4 border rounded-lg focus:outline-none focus:shadow-outline disabled:opacity-50"
+                                                className="flex-1 bg-[#1e1e1e] hover:bg-[#F09B35] cursor-pointer text-white font-bold py-2 px-4 border rounded-lg focus:outline-none focus:shadow-outline disabled:opacity-50 flex items-center justify-center gap-2"
                                                 type="button"
                                                 onClick={verifyEmailOtp}
                                                 disabled={loading}
                                             >
+                                                {loading && (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                )}
                                                 {loading
-                                                    ? "Verifying..."
+                                                    ? "Verifying"
                                                     : "Verify OTP"}
                                             </button>
                                             <button

@@ -16,6 +16,7 @@ import {
     InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { supabase } from "../../supabaseClient";
+import { useToastApi } from "../components/ui/toast";
 
 function Register() {
     const [step, setStep] = useState(1); // 1 = basic info, 2 = OTP, 3 = Face++
@@ -28,6 +29,8 @@ function Register() {
     const [stream, setStream] = useState(null);
     const [capturedImage, setCapturedImage] = useState(null);
     const [result, setResult] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const toast = useToastApi();
 
     const startCamera = async () => {
         try {
@@ -41,7 +44,7 @@ function Register() {
             }
         } catch (err) {
             console.error("Camera error:", err);
-            alert("Camera error: " + err.message);
+            toast.error("Unable to access camera. Please check your device permissions and try again.");
         }
     };
 
@@ -85,6 +88,7 @@ function Register() {
             } catch (err) {
                 console.error("Face++ API error:", err);
                 setResult("⚠️ Error comparing faces");
+                toast.error("Face compare failed");
             }
         }, "image/jpeg");
     };
@@ -164,136 +168,127 @@ function Register() {
     const handleNext = async () => {
         if (step === 1) {
             if (!formData.email) {
-                alert("Please enter your email first.");
+                toast.error("Please enter your email first.");
                 return;
             }
             if (!formData.password || !formData.confirmPassword) {
-                alert("Please enter and confirm your password.");
+                toast.error("Please enter and confirm your password.");
                 return;
             }
             if (formData.password !== formData.confirmPassword) {
-                alert("Passwords do not match.");
+                toast.error("Passwords do not match.");
                 return;
             }
             if (formData.password.length < 8) {
-                alert("Password must be at least 8 characters.");
+                toast.error("Password must be at least 8 characters.");
                 return;
             }
-
-            const { error } = await supabase.auth.signInWithOtp({
-                email: formData.email,
-                options: {
-                    shouldCreateUser: true,
-                },
-            });
-            if (error) {
-                console.error(error.message);
-                alert("Failed to send OTP: " + error.message);
-                return;
+            try {
+                setLoading(true);
+                const { error } = await supabase.auth.signInWithOtp({
+                    email: formData.email,
+                    options: {
+                        shouldCreateUser: true,
+                    },
+                });
+                if (error) throw error;
+                console.log("OTP sent to", formData.email);
+                toast.success("OTP sent to " + formData.email);
+                setStep(2);
+            } catch (e) {
+                console.error(e.message);
+                toast.error("Failed to send OTP: " + e.message);
+            } finally {
+                setLoading(false);
             }
-            console.log("OTP sent to", formData.email);
-            setStep(2);
             return;
         }
 
         if (step === 2) {
             if (!formData.otp) {
-                alert("Please enter the OTP.");
+                toast.error("Please enter the OTP.");
                 return;
             }
-
-            const {
-                data: { session },
-                error,
-            } = await supabase.auth.verifyOtp({
-                email: formData.email,
-                token: formData.otp,
-                type: "email",
-            });
-            if (error) {
-                console.error(error.message);
-                alert("Invalid or expired OTP: " + error.message);
-                return;
+            try {
+                setLoading(true);
+                const {
+                    data: { session },
+                    error,
+                } = await supabase.auth.verifyOtp({
+                    email: formData.email,
+                    token: formData.otp,
+                    type: "email",
+                });
+                if (error) throw error;
+                console.log("OTP verified, session established:", session);
+                toast.success("OTP verified");
+                setStep(3);
+            } catch (e) {
+                console.error(e.message);
+                toast.error("Invalid or expired OTP: " + e.message);
+            } finally {
+                setLoading(false);
             }
-            console.log("OTP verified, session established:", session);
-            setStep(3);
             return;
         }
 
         if (step === 3) {
             if (!capturedImage) {
-                alert("Please capture your selfie first.");
+                toast.error("Please capture your selfie first.");
                 return;
             }
-
             const faceOk = await compareFaces();
             if (!faceOk) {
-                alert("Face verification failed!");
+                toast.error("Face verification failed!");
                 return;
             }
-
             try {
+                setLoading(true);
                 const { error: updatePasswordError } =
                     await supabase.auth.updateUser({
                         password: formData.password,
                     });
-                if (updatePasswordError) {
-                    console.error(updatePasswordError.message);
-                    alert(
-                        "Failed to set password: " + updatePasswordError.message
-                    );
-                    return;
-                }
+                if (updatePasswordError) throw updatePasswordError;
 
-                // Get current authenticated user for FK id
                 const { data: userData, error: userErr } =
                     await supabase.auth.getUser();
-                if (userErr || !userData?.user) {
-                    console.error(userErr?.message || "No user in session");
-                    alert("Missing authenticated user. Please retry OTP.");
-                    return;
-                }
+                if (userErr || !userData?.user)
+                    throw new Error(userErr?.message || "No user in session");
                 const userId = userData.user.id;
 
-                // Upload ID image
                 let idImageUrl = null;
                 if (formData.idImage) {
-                    const { data, error } = await supabase.storage
+                    const idPath = `${userId}/id_${Date.now()}_${
+                        formData.idImage.name
+                    }`;
+                    const { error: idErr } = await supabase.storage
                         .from("user-ids")
-                        .upload(
-                            `ids/${Date.now()}_${formData.idImage.name}`,
-                            formData.idImage
-                        );
-
-                    if (error) throw error;
-
-                    const { data: publicUrl } = supabase.storage
+                        .upload(idPath, formData.idImage);
+                    if (idErr) throw idErr;
+                    const { data: idPub } = supabase.storage
                         .from("user-ids")
-                        .getPublicUrl(data.path);
-                    idImageUrl = publicUrl.publicUrl;
+                        .getPublicUrl(idPath);
+                    idImageUrl = idPub?.publicUrl || null;
                 }
 
-                // Upload selfie
                 let faceImageUrl = null;
                 if (capturedImage) {
-                    const file = new File(
+                    const selfieFile = new File(
                         [capturedImage],
                         `selfie_${Date.now()}.jpg`,
                         { type: "image/jpeg" }
                     );
-                    const { data, error } = await supabase.storage
+                    const facePath = `${userId}/faces/${selfieFile.name}`;
+                    const { error: faceErr } = await supabase.storage
                         .from("user-faces")
-                        .upload(`faces/${file.name}`, file);
-
-                    if (error) throw error;
-
-                    const { data: publicUrl } = supabase.storage
+                        .upload(facePath, selfieFile);
+                    if (faceErr) throw faceErr;
+                    const { data: facePub } = supabase.storage
                         .from("user-faces")
-                        .getPublicUrl(data.path);
-                    faceImageUrl = publicUrl.publicUrl;
+                        .getPublicUrl(facePath);
+                    faceImageUrl = facePub?.publicUrl || null;
                 }
 
-                // Insert user into your table
                 const { error: insertError } = await supabase
                     .from("users")
                     .insert([
@@ -315,18 +310,31 @@ function Register() {
                                     : null,
                             id_image_url: idImageUrl,
                             face_image_url: faceImageUrl,
-                            face_verified: true,
+                            face_verified: false,
                             role: "unverified",
                         },
                     ]);
-
                 if (insertError) throw insertError;
 
-                alert("🎉 Registration successful!");
-                console.log("User saved to Supabase");
+                await supabase.from("activity_log").insert([
+                    {
+                        user_id: userId,
+                        action_type: "registration",
+                        description:
+                            "User completed registration + automated face match; pending manual admin verification",
+                        target_table: "users",
+                        target_id: userId,
+                    },
+                ]);
+
+                toast.success(
+                    "Registration submitted! Pending admin verification."
+                );
             } catch (err) {
                 console.error("Error during registration:", err);
-                alert("Failed to register: " + err.message);
+                toast.error("Failed to register: " + err.message);
+            } finally {
+                setLoading(false);
             }
         }
     };
@@ -665,9 +673,18 @@ function Register() {
                     <Button
                         variant="default"
                         onClick={handleNext}
-                        className="h-12 bg-[#1E1E1E] text-white hover:bg-[#ffab00] hover:text-white cursor-pointer px-6"
+                        disabled={loading}
+                        className="h-12 bg-[#1E1E1E] text-white hover:bg-[#ffab00] hover:text-white cursor-pointer px-6 disabled:opacity-60"
                     >
-                        {step === 3 ? "Register" : "Next"}
+                        {loading
+                            ? step === 1
+                                ? "Sending OTP..."
+                                : step === 2
+                                ? "Verifying OTP..."
+                                : "Submitting..."
+                            : step === 3
+                            ? "Register"
+                            : "Next"}
                     </Button>
                 </div>
                 <div className="text-center mt-4 flex flex-row items-center gap-2 justify-center">
