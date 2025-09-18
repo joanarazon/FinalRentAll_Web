@@ -44,7 +44,7 @@ function Register() {
             }
         } catch (err) {
             console.error("Camera error:", err);
-            toast.error("Camera error: " + err.message);
+            toast.error("Unable to access camera. Please check your device permissions and try again.");
         }
     };
 
