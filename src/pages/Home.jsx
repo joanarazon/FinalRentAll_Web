@@ -5,6 +5,7 @@ import ItemCard from "../components/ItemCard";
 import AddItemModal from "../components/AddItemModal";
 import { supabase } from "../../supabaseClient";
 import { Skeleton } from "@/components/ui/skeleton";
+import BookItemModal from "../components/BookItemModal";
 
 function Home() {
     const user = useUser();
@@ -15,6 +16,8 @@ function Home() {
     const [searchTerm, setSearchTerm] = useState("");
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [bookOpen, setBookOpen] = useState(false);
+    const [selectedItem, setSelectedItem] = useState(null);
 
     const toggleFavorite = (item) => {
         setFavorites((prev) => {
@@ -86,6 +89,7 @@ function Home() {
                         date: new Date(it.created_at).toLocaleDateString(),
                         price: String(it.price_per_day),
                         imageUrl: imageUrl,
+                        raw: it,
                     };
                 })
             );
@@ -241,6 +245,10 @@ function Home() {
                                 isOwner={user?.id === item.ownerId}
                                 isFavorited={isFavorited}
                                 onHeartClick={() => toggleFavorite(item)}
+                                onRentClick={() => {
+                                    setSelectedItem(item.raw || item); // prefer raw DB shape if available
+                                    setBookOpen(true);
+                                }}
                             />
                         );
                     })}
@@ -260,6 +268,14 @@ function Home() {
                 onCreated={() => {
                     fetchItems();
                 }}
+            />
+
+            <BookItemModal
+                open={bookOpen}
+                onOpenChange={setBookOpen}
+                item={selectedItem}
+                currentUserId={user?.id}
+                onBooked={() => fetchItems()}
             />
         </div>
     );

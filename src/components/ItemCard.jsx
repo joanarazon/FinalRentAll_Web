@@ -19,6 +19,7 @@ function ItemCard({
     onHeartClick,
     isFavorited,
     isOwner,
+    onRentClick,
 }) {
     return (
         <Card
@@ -74,6 +75,7 @@ function ItemCard({
                                 isOwner ? "opacity-60 cursor-not-allowed" : ""
                             }`}
                             disabled={isOwner}
+                            onClick={!isOwner ? onRentClick : undefined}
                         >
                             <p>{isOwner ? "Your Item" : "Rent Now"}</p>
                         </Button>
