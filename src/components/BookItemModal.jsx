@@ -21,7 +21,6 @@ export default function BookItemModal({
     currentUserId,
     onBooked,
 }) {
-    // Custom DayButton: start/end solid #FFAB00, middle washed-out
     const DayButton = ({ className, ...props }) => (
         <CalendarDayButton
             {...props}
@@ -34,18 +33,22 @@ export default function BookItemModal({
             )}
         />
     );
+
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
-    // Quantity and availability
     const [quantity, setQuantity] = useState(1);
-    const [remaining, setRemaining] = useState(null); // null when no range
+    const [remaining, setRemaining] = useState(null);
     const [availabilityLoading, setAvailabilityLoading] = useState(false);
+    const [requestedUnits, setRequestedUnits] = useState(1);
     const [range, setRange] = useState({ from: undefined, to: undefined });
     const [imageUrl, setImageUrl] = useState();
     const [imageLoading, setImageLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
     const [owner, setOwner] = useState(null);
     const [ownerLoading, setOwnerLoading] = useState(false);
+    const [reviews, setReviews] = useState([]);
+    const [reviewsLoading, setReviewsLoading] = useState(false);
+    const [reviewsError, setReviewsError] = useState("");
 
     const today = useMemo(() => {
         const d = new Date();
@@ -53,7 +56,6 @@ export default function BookItemModal({
         return d;
     }, []);
 
-    // Fetch item quantity (use prop if present)
     useEffect(() => {
         if (!open || !item?.item_id) return;
         if (item?.quantity != null) {
@@ -97,7 +99,6 @@ export default function BookItemModal({
         })();
     }, [open, item?.item_id, item?.user_id]);
 
-    // Fetch owner profile basics for display (first/last name, phone, created_at)
     useEffect(() => {
         if (!open || !item?.user_id) return;
         (async () => {
@@ -125,14 +126,12 @@ export default function BookItemModal({
             setRange({ from: undefined, to: undefined });
             setRemaining(null);
             setErrorMsg("");
+            setRequestedUnits(1);
         }
     }, [open]);
 
-    const disabled = useMemo(() => {
-        return [{ before: today }];
-    }, [today]);
+    const disabled = useMemo(() => [{ before: today }], [today]);
 
-    // Compute remaining availability for selected range
     useEffect(() => {
         const hasRange = !!range.from && !!range.to;
         if (!open || !item?.item_id || !hasRange) {
@@ -142,34 +141,29 @@ export default function BookItemModal({
         (async () => {
             try {
                 setAvailabilityLoading(true);
-                const from = (() => {
-                    const d = new Date(range.from);
-                    d.setHours(0, 0, 0, 0);
-                    return d;
-                })();
-                const to = (() => {
-                    const d = new Date(range.to);
-                    d.setHours(0, 0, 0, 0);
-                    return d;
-                })();
+                const from = new Date(range.from);
+                from.setHours(0, 0, 0, 0);
+                const to = new Date(range.to);
+                to.setHours(0, 0, 0, 0);
                 const fromStr = `${from.getFullYear()}-${String(
                     from.getMonth() + 1
                 ).padStart(2, "0")}-${String(from.getDate()).padStart(2, "0")}`;
                 const toStr = `${to.getFullYear()}-${String(
                     to.getMonth() + 1
                 ).padStart(2, "0")}-${String(to.getDate()).padStart(2, "0")}`;
-
                 const { count } = await supabase
                     .from("rental_transactions")
                     .select("*", { count: "exact", head: true })
                     .eq("item_id", item.item_id)
-                    .in("status", ["pending", "confirmed", "ongoing"])
+                    .in("status", ["confirmed", "ongoing"])
                     .lte("start_date", toStr)
                     .gte("end_date", fromStr);
-
                 const overlaps = Number(count || 0);
                 const rem = Math.max(0, (Number(quantity) || 1) - overlaps);
                 setRemaining(rem);
+                setRequestedUnits((prev) =>
+                    Math.min(Math.max(1, prev || 1), rem || 1)
+                );
             } finally {
                 setAvailabilityLoading(false);
             }
@@ -180,14 +174,15 @@ export default function BookItemModal({
         if (!range.from || !range.to) return 0;
         const ms =
             range.to.setHours(0, 0, 0, 0) - range.from.setHours(0, 0, 0, 0);
-        return Math.floor(ms / (1000 * 60 * 60 * 24)) + 1; // inclusive
+        return Math.floor(ms / (1000 * 60 * 60 * 24)) + 1;
     }, [range]);
 
     const total = useMemo(() => {
         const price = Number(item?.price_per_day || 0);
         const deposit = Number(item?.deposit_fee || 0);
-        return price * daysCount + deposit;
-    }, [item?.price_per_day, item?.deposit_fee, daysCount]);
+        const units = Number(requestedUnits || 1);
+        return price * daysCount * units + deposit * units;
+    }, [item?.price_per_day, item?.deposit_fee, daysCount, requestedUnits]);
 
     const formatDate = (d) => {
         if (!d) return null;
@@ -197,6 +192,56 @@ export default function BookItemModal({
         return `${y}-${m}-${day}`;
     };
 
+    useEffect(() => {
+        if (!open || !item?.item_id) return;
+        (async () => {
+            try {
+                setReviewsLoading(true);
+                setReviewsError("");
+                const { data, error } = await supabase
+                    .from("reviews")
+                    .select("rating, comment, created_at")
+                    .eq("item_id", item.item_id)
+                    .order("created_at", { ascending: false })
+                    .limit(10);
+                if (error) throw error;
+                setReviews(data || []);
+            } catch (e) {
+                setReviews([]);
+                setReviewsError("Failed to load reviews.");
+            } finally {
+                setReviewsLoading(false);
+            }
+        })();
+    }, [open, item?.item_id]);
+
+    const averageRating = useMemo(() => {
+        if (!reviews || reviews.length === 0) return 0;
+        const sum = reviews.reduce((s, r) => s + Number(r.rating || 0), 0);
+        return sum / reviews.length;
+    }, [reviews]);
+
+    const StarRow = ({ value, className = "" }) => {
+        const full = Math.round(value);
+        return (
+            <div
+                className={`flex items-center gap-0.5 ${className}`}
+                aria-label={`${value.toFixed(1)} out of 5`}
+            >
+                {Array.from({ length: 5 }).map((_, i) => (
+                    <span
+                        key={i}
+                        className={
+                            i < full ? "text-yellow-500" : "text-gray-300"
+                        }
+                    >
+                        ★
+                    </span>
+                ))}
+            </div>
+        );
+    };
+
     const isOwner =
         currentUserId && item?.user_id && currentUserId === item.user_id;
     const canSubmit =
@@ -204,7 +249,10 @@ export default function BookItemModal({
         !isOwner &&
         daysCount > 0 &&
         !!currentUserId &&
-        (remaining === null || remaining > 0);
+        (remaining === null ||
+            (remaining > 0 &&
+                requestedUnits >= 1 &&
+                requestedUnits <= remaining));
 
     const submit = async () => {
         setErrorMsg("");
@@ -227,7 +275,6 @@ export default function BookItemModal({
             );
             return;
         }
-        // Guard: prevent past start dates even if UI is bypassed
         const startMidnight = new Date(range.from);
         startMidnight.setHours(0, 0, 0, 0);
         if (startMidnight < today) {
@@ -236,18 +283,27 @@ export default function BookItemModal({
         }
         try {
             setLoading(true);
-            const payload = {
+            const base = {
                 item_id: item.item_id,
                 renter_id: currentUserId,
                 start_date: formatDate(range.from),
                 end_date: formatDate(range.to),
-                total_cost: total,
             };
+            const unitsToBook = Math.max(
+                1,
+                Math.min(requestedUnits || 1, remaining || 1)
+            );
+            const perUnitCost =
+                Number(item?.price_per_day || 0) * daysCount +
+                Number(item?.deposit_fee || 0);
+            const rows = Array.from({ length: unitsToBook }, () => ({
+                ...base,
+                total_cost: perUnitCost,
+            }));
             const { error } = await supabase
                 .from("rental_transactions")
-                .insert([payload]);
+                .insert(rows);
             if (error) {
-                // DB enforces capacity; turn violation into friendly message
                 setErrorMsg(
                     "Booking could not be created. The selected dates may be fully booked."
                 );
@@ -256,9 +312,8 @@ export default function BookItemModal({
             onBooked?.();
             onOpenChange(false);
         } catch (e) {
-            if (!errorMsg) {
+            if (!errorMsg)
                 setErrorMsg("Failed to submit booking. Please try again.");
-            }
         } finally {
             setLoading(false);
         }
@@ -273,15 +328,26 @@ export default function BookItemModal({
                 <SheetHeader>
                     <SheetTitle>Rent "{item?.title}"</SheetTitle>
                 </SheetHeader>
-                <div className="flex-1 overflow-y-auto p-4 min-h-0">
+
+                <div className="flex-1 overflow-y-auto p-4 min-h-0 space-y-4">
+                    {/* Item details first */}
                     <div className="flex flex-col md:flex-row gap-4 md:gap-6">
                         {imageLoading ? (
-                            <Skeleton className="w-full md:w-56 h-40 md:h-40 rounded-md" />
+                            <Skeleton className="w-full md:w-64 h-44 md:h-44 rounded-md" />
                         ) : imageUrl ? (
                             <img
                                 src={imageUrl}
                                 alt={item?.title || "Item image"}
-                                className="w-full md:w-56 h-40 md:h-40 object-cover rounded-md border"
+                                className="w-full md:w-64 h-44 md:h-44 object-cover rounded-md border cursor-zoom-in"
+                                onClick={() => {
+                                    if (imageUrl)
+                                        window.open(
+                                            imageUrl,
+                                            "_blank",
+                                            "noopener,noreferrer"
+                                        );
+                                }}
+                                title="Click to view full image"
                             />
                         ) : null}
                         <div className="flex-1 grid grid-cols-2 gap-4">
@@ -312,11 +378,88 @@ export default function BookItemModal({
                                     <p className="text-base">{item.location}</p>
                                 </div>
                             )}
+                            {item?.description && (
+                                <div className="col-span-2">
+                                    <p className="text-sm text-gray-600">
+                                        Description
+                                    </p>
+                                    <p className="text-sm leading-relaxed whitespace-pre-line">
+                                        {item.description}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    <Separator className="my-4" />
+                    {/* Average rating */}
+                    <div className="p-4 border rounded-md bg-white">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <StarRow value={averageRating} />
+                                <span className="text-sm text-gray-700">
+                                    {reviews && reviews.length > 0
+                                        ? `${averageRating.toFixed(1)} / 5 · ${
+                                              reviews.length
+                                          } review${
+                                              reviews.length > 1 ? "s" : ""
+                                          }`
+                                        : "No reviews yet"}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
 
+                    {/* Reviews list */}
+                    <div className="p-4 border rounded-md bg-white">
+                        <p className="font-medium mb-2">User reviews</p>
+                        {reviewsLoading ? (
+                            <div className="space-y-2">
+                                <Skeleton className="h-4 w-1/3" />
+                                <Skeleton className="h-4 w-2/3" />
+                                <Skeleton className="h-4 w-1/2" />
+                            </div>
+                        ) : reviewsError ? (
+                            <p className="text-sm text-red-600">
+                                {reviewsError}
+                            </p>
+                        ) : reviews && reviews.length > 0 ? (
+                            <div className="space-y-4">
+                                {reviews.map((r, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="border-b last:border-b-0 pb-3 last:pb-0"
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <StarRow
+                                                value={Number(r.rating || 0)}
+                                                className="text-base"
+                                            />
+                                            <span className="text-xs text-gray-500">
+                                                {r.created_at
+                                                    ? new Date(
+                                                          r.created_at
+                                                      ).toLocaleDateString()
+                                                    : ""}
+                                            </span>
+                                        </div>
+                                        {r.comment && (
+                                            <p className="text-sm mt-1 whitespace-pre-line">
+                                                {r.comment}
+                                            </p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-gray-600">
+                                No reviews yet for this item.
+                            </p>
+                        )}
+                    </div>
+
+                    <Separator />
+
+                    {/* Booking form below reviews */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <div className="flex items-center justify-between mb-2">
@@ -397,6 +540,36 @@ export default function BookItemModal({
                                             : "—"}
                                     </span>
                                 </div>
+                                <div className="flex items-center justify-between gap-2 mt-1">
+                                    <label className="text-sm">
+                                        Units to book
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={Math.max(1, remaining || 1)}
+                                        value={requestedUnits}
+                                        onChange={(e) => {
+                                            const v = Number(
+                                                e.target.value || 1
+                                            );
+                                            const max = Math.max(
+                                                1,
+                                                remaining || 1
+                                            );
+                                            setRequestedUnits(
+                                                Math.min(Math.max(1, v), max)
+                                            );
+                                        }}
+                                        disabled={
+                                            !range.from ||
+                                            !range.to ||
+                                            availabilityLoading ||
+                                            (remaining ?? 0) <= 0
+                                        }
+                                        className="w-24 border rounded px-2 py-1 text-right"
+                                    />
+                                </div>
                                 <Separator className="my-2" />
                                 <div className="flex justify-between">
                                     <span>Subtotal</span>
@@ -404,7 +577,8 @@ export default function BookItemModal({
                                         ₱
                                         {(
                                             Number(item?.price_per_day || 0) *
-                                            daysCount
+                                            daysCount *
+                                            (requestedUnits || 1)
                                         ).toFixed(2)}
                                     </span>
                                 </div>
@@ -412,9 +586,10 @@ export default function BookItemModal({
                                     <span>Deposit</span>
                                     <span>
                                         ₱
-                                        {Number(item?.deposit_fee || 0).toFixed(
-                                            2
-                                        )}
+                                        {(
+                                            Number(item?.deposit_fee || 0) *
+                                            (requestedUnits || 1)
+                                        ).toFixed(2)}
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-base font-semibold mt-1">
@@ -422,7 +597,6 @@ export default function BookItemModal({
                                     <span>₱{total.toFixed(2)}</span>
                                 </div>
                             </div>
-                            {/* Owner info */}
                             {ownerLoading ? (
                                 <div className="mt-4 p-3 border rounded bg-white space-y-2">
                                     <Skeleton className="h-5 w-24" />
@@ -526,6 +700,7 @@ export default function BookItemModal({
                         </div>
                     </div>
                 </div>
+
                 <SheetFooter className="border-t bg-white/60 backdrop-blur supports-[backdrop-filter]:bg-white/40 sticky bottom-0">
                     <Button
                         variant="outline"

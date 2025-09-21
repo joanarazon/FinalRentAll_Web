@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
 import TopMenu from "../components/topMenu";
+import { useToastApi } from "@/components/ui/toast";
 
 export default function OwnerBookingRequests({
     favorites,
@@ -12,6 +13,7 @@ export default function OwnerBookingRequests({
     setSearchTerm,
 }) {
     const user = useUser();
+    const toast = useToastApi();
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [actionId, setActionId] = useState(null);
@@ -55,7 +57,17 @@ export default function OwnerBookingRequests({
                 .update({ status: "confirmed" })
                 .eq("rental_id", txId)
                 .eq("status", "pending");
-            if (error) throw error;
+            if (error) {
+                // Surface capacity violation or other errors
+                toast.error(
+                    error.message?.includes("booked")
+                        ? "Capacity exceeded: dates are fully booked."
+                        : `Approve failed: ${error.message || "Unknown error"}`
+                );
+                throw error;
+            } else {
+                toast.success("Request approved");
+            }
         } catch (e) {
             console.error("Approve failed:", e.message);
         } finally {
@@ -72,7 +84,14 @@ export default function OwnerBookingRequests({
                 .update({ status: "rejected" })
                 .eq("rental_id", txId)
                 .eq("status", "pending");
-            if (error) throw error;
+            if (error) {
+                toast.error(
+                    `Reject failed: ${error.message || "Unknown error"}`
+                );
+                throw error;
+            } else {
+                toast.success("Request rejected");
+            }
         } catch (e) {
             console.error("Reject failed:", e.message);
         } finally {

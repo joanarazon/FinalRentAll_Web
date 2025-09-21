@@ -59,6 +59,20 @@ export default function TopMenu({
                     </Button>
                     <Button
                         variant="link"
+                        className={`${linkClass("my-bookings")} cursor-pointer`}
+                        onClick={() => navigate("/my-bookings")}
+                    >
+                        My Bookings
+                    </Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("my-ratings")} cursor-pointer`}
+                        onClick={() => navigate("/my-ratings")}
+                    >
+                        Ratings
+                    </Button>
+                    <Button
+                        variant="link"
                         className={`${linkClass("requests")} cursor-pointer`}
                         onClick={() => navigate("/booking-requests")}
                     >
@@ -101,6 +115,20 @@ export default function TopMenu({
                         onClick={handleHome}
                     >
                         Home
+                    </Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("my-bookings")} cursor-pointer`}
+                        onClick={() => navigate("/my-bookings")}
+                    >
+                        My Bookings
+                    </Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("my-ratings")} cursor-pointer`}
+                        onClick={() => navigate("/my-ratings")}
+                    >
+                        Ratings
                     </Button>
                     <Button
                         variant="link"

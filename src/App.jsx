@@ -20,6 +20,8 @@ import OwnerBookingRequests from "./pages/OwnerBookingRequests";
 import RequireAuth from "./components/RequireAuth.jsx";
 import RequireRole from "./components/RequireRole.jsx";
 import NotAuthorized from "./pages/NotAuthorized.jsx";
+import MyBookings from "./pages/MyBookings";
+import MyRatings from "./pages/MyRatings";
 
 export default class App extends Component {
     render() {
@@ -58,6 +60,22 @@ export default class App extends Component {
                         element={
                             <RequireAuth>
                                 <OwnerBookingRequests />
+                            </RequireAuth>
+                        }
+                    />
+                    <Route
+                        path="/my-bookings"
+                        element={
+                            <RequireAuth>
+                                <MyBookings />
+                            </RequireAuth>
+                        }
+                    />
+                    <Route
+                        path="/my-ratings"
+                        element={
+                            <RequireAuth>
+                                <MyRatings />
                             </RequireAuth>
                         }
                     />
