@@ -40,9 +40,8 @@ function Login() {
                 });
             }
             if (role === "user") {
-                // Users attempting to access admin should go to Not Authorized
-                if (isAdminRoute)
-                    return navigate("/not-authorized", { replace: true });
+                // Users attempting to access admin should go to Home instead
+                if (isAdminRoute) return navigate("/home", { replace: true });
                 return navigate(from, { replace: true });
             }
             // Unknown role is unauthorized

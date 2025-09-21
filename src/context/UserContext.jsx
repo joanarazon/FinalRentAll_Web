@@ -50,10 +50,9 @@ export function UserProvider({ children }) {
                 if (authUser) {
                     const minimal = { id: authUser.id, email: authUser.email };
                     if (mounted) setUser(minimal);
-                    // Enhance with profile asynchronously
-                    loadProfile(authUser).then((merged) => {
-                        if (mounted && merged) setUser(merged);
-                    });
+                    // Enhance with profile and wait so role is known before clearing loading
+                    const merged = await loadProfile(authUser);
+                    if (mounted && merged) setUser(merged);
                 } else {
                     // Fallback to localStorage compatibility
                     const stored = localStorage.getItem("loggedInUser");

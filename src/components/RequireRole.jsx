@@ -16,7 +16,10 @@ export default function RequireRole({
 
     const role = user?.role;
     const needsRole = allow.length > 0;
-    const unauthorized = !user || (needsRole && !allow.includes(role));
+    // If we have a user but role not loaded yet and we need a role, keep loading
+    const waitingOnRole = !!user && needsRole && typeof role === "undefined";
+    const unauthorized =
+        !user || (needsRole && !waitingOnRole && !allow.includes(role));
 
     useEffect(() => {
         if (!loading && unauthorized && !notifiedRef.current) {
@@ -25,7 +28,7 @@ export default function RequireRole({
         }
     }, [loading, unauthorized, toast]);
 
-    if (loading) return <Loading />;
+    if (loading || waitingOnRole) return <Loading />;
     if (unauthorized) {
         return <Navigate to={to} replace state={{ from: location }} />;
     }

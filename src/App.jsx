@@ -4,6 +4,7 @@ import {
     Routes,
     Route,
     Outlet,
+    Navigate,
 } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -22,63 +23,49 @@ import RequireRole from "./components/RequireRole.jsx";
 import NotAuthorized from "./pages/NotAuthorized.jsx";
 import MyBookings from "./pages/MyBookings";
 import MyRatings from "./pages/MyRatings";
+import { useUserContext } from "./context/UserContext.jsx";
+import Loading from "./components/Loading.jsx";
+
+function RoleAwareLanding() {
+    const { user, loading } = useUserContext();
+    if (loading) return <Loading />;
+    const role = user?.role;
+    if (role === "admin") return <Navigate to="/adminhome" replace />;
+    if (role === "user") return <Navigate to="/home" replace />;
+    return <Login />;
+}
 
 export default class App extends Component {
     render() {
         return (
             <Router>
                 <Routes>
-                    <Route path="/" element={<Login />} />
+                    <Route path="/" element={<RoleAwareLanding />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/not-authorized" element={<NotAuthorized />} />
+                    {/* User group */}
                     <Route
-                        path="/home"
                         element={
                             <RequireAuth>
-                                <Home />
+                                <RequireRole allow={["user"]}>
+                                    <Outlet />
+                                </RequireRole>
                             </RequireAuth>
                         }
-                    />
-                    <Route
-                        path="/inbox"
-                        element={
-                            <RequireAuth>
-                                <Inbox />
-                            </RequireAuth>
-                        }
-                    />
-                    <Route
-                        path="/notifications"
-                        element={
-                            <RequireAuth>
-                                <Notification />
-                            </RequireAuth>
-                        }
-                    />
-                    <Route
-                        path="/booking-requests"
-                        element={
-                            <RequireAuth>
-                                <OwnerBookingRequests />
-                            </RequireAuth>
-                        }
-                    />
-                    <Route
-                        path="/my-bookings"
-                        element={
-                            <RequireAuth>
-                                <MyBookings />
-                            </RequireAuth>
-                        }
-                    />
-                    <Route
-                        path="/my-ratings"
-                        element={
-                            <RequireAuth>
-                                <MyRatings />
-                            </RequireAuth>
-                        }
-                    />
+                    >
+                        <Route path="/home" element={<Home />} />
+                        <Route path="/inbox" element={<Inbox />} />
+                        <Route
+                            path="/notifications"
+                            element={<Notification />}
+                        />
+                        <Route
+                            path="/booking-requests"
+                            element={<OwnerBookingRequests />}
+                        />
+                        <Route path="/my-bookings" element={<MyBookings />} />
+                        <Route path="/my-ratings" element={<MyRatings />} />
+                    </Route>
                     {/* Admin group */}
                     <Route
                         element={
