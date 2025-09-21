@@ -15,6 +15,7 @@ export default function OwnerBookingRequests({
     const user = useUser();
     const toast = useToastApi();
     const [rows, setRows] = useState([]);
+    const [awaiting, setAwaiting] = useState([]);
     const [loading, setLoading] = useState(false);
     const [actionId, setActionId] = useState(null);
 
@@ -38,6 +39,20 @@ export default function OwnerBookingRequests({
                 (r) => r.renter_id && r.renter_id !== user.id
             );
             setRows(filtered);
+
+            const { data: ret, error: e2 } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,renter_return_marked_at,
+                     items!inner(title,user_id),
+                     renter:renter_id ( first_name,last_name )`
+                )
+                .eq("items.user_id", user.id)
+                .eq("status", "awaiting_owner_confirmation")
+                .neq("renter_id", user.id)
+                .order("renter_return_marked_at", { ascending: true });
+            if (e2) throw e2;
+            setAwaiting(ret || []);
         } catch (e) {
             console.error("Load owner requests failed:", e.message);
         } finally {
@@ -70,6 +85,57 @@ export default function OwnerBookingRequests({
             }
         } catch (e) {
             console.error("Approve failed:", e.message);
+        } finally {
+            setActionId(null);
+            fetchData();
+        }
+    };
+
+    const confirmReturn = async (txId) => {
+        setActionId(txId);
+        try {
+            const { error } = await supabase
+                .from("rental_transactions")
+                .update({
+                    status: "completed",
+                    owner_confirmed_at: new Date().toISOString(),
+                })
+                .eq("rental_id", txId)
+                .eq("status", "awaiting_owner_confirmation");
+            if (error) {
+                toast.error(
+                    `Confirm return failed: ${error.message || "Unknown error"}`
+                );
+                throw error;
+            } else {
+                toast.success("Return confirmed. Rental completed.");
+            }
+        } catch (e) {
+            console.error("Confirm return failed:", e.message);
+        } finally {
+            setActionId(null);
+            fetchData();
+        }
+    };
+
+    const reportIssue = async (txId) => {
+        setActionId(txId);
+        try {
+            const { error } = await supabase
+                .from("rental_transactions")
+                .update({ status: "disputed" })
+                .eq("rental_id", txId)
+                .eq("status", "awaiting_owner_confirmation");
+            if (error) {
+                toast.error(
+                    `Report issue failed: ${error.message || "Unknown error"}`
+                );
+                throw error;
+            } else {
+                toast.info("Issue reported. Our team will review.");
+            }
+        } catch (e) {
+            console.error("Report issue failed:", e.message);
         } finally {
             setActionId(null);
             fetchData();
@@ -208,6 +274,101 @@ export default function OwnerBookingRequests({
                                                         <Loader2 className="w-4 h-4 animate-spin" />
                                                     ) : (
                                                         "Reject"
+                                                    )}
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+
+                <h2 className="text-xl font-semibold mt-8 mb-2">
+                    Awaiting Owner Confirmation
+                </h2>
+                <div className="bg-white rounded-lg shadow-sm border p-4">
+                    {loading ? (
+                        <div className="text-sm text-gray-600">Loading…</div>
+                    ) : awaiting.length === 0 ? (
+                        <div className="text-sm text-gray-600">
+                            No returns awaiting confirmation.
+                        </div>
+                    ) : (
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b bg-gray-50">
+                                    <th className="p-2">Item</th>
+                                    <th className="p-2">Renter</th>
+                                    <th className="p-2">Dates</th>
+                                    <th className="p-2">Marked Returned</th>
+                                    <th className="p-2">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {awaiting.map((r) => (
+                                    <tr key={r.rental_id} className="border-b">
+                                        <td className="p-2 text-sm">
+                                            {r.items?.title || r.item_id}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {r.renter?.first_name}{" "}
+                                            {r.renter?.last_name}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {new Date(
+                                                r.start_date
+                                            ).toLocaleDateString()}{" "}
+                                            —{" "}
+                                            {new Date(
+                                                r.end_date
+                                            ).toLocaleDateString()}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {r.renter_return_marked_at
+                                                ? new Date(
+                                                      r.renter_return_marked_at
+                                                  ).toLocaleString()
+                                                : "—"}
+                                        </td>
+                                        <td className="p-2">
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
+                                                    disabled={
+                                                        actionId === r.rental_id
+                                                    }
+                                                    onClick={() =>
+                                                        confirmReturn(
+                                                            r.rental_id
+                                                        )
+                                                    }
+                                                >
+                                                    {actionId ===
+                                                    r.rental_id ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        "Confirm Return"
+                                                    )}
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="destructive"
+                                                    className="cursor-pointer"
+                                                    disabled={
+                                                        actionId === r.rental_id
+                                                    }
+                                                    onClick={() =>
+                                                        reportIssue(r.rental_id)
+                                                    }
+                                                >
+                                                    {actionId ===
+                                                    r.rental_id ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        "Report Issue"
                                                     )}
                                                 </Button>
                                             </div>

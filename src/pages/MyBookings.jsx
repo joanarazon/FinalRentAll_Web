@@ -3,6 +3,8 @@ import TopMenu from "@/components/topMenu";
 import { useUser } from "@/hooks/useUser";
 import { supabase } from "../../supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useToastApi } from "@/components/ui/toast";
 import { Separator } from "@/components/ui/separator";
 import Loading from "@/components/Loading";
 
@@ -11,6 +13,7 @@ export default function MyBookings() {
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState([]);
     const [search, setSearch] = useState("");
+    const toast = useToastApi();
 
     useEffect(() => {
         if (!user?.id) return;
@@ -67,7 +70,31 @@ export default function MyBookings() {
                     <div className="space-y-6">
                         <Section title="Pending" data={grouped.pending} />
                         <Separator />
-                        <Section title="Ongoing" data={grouped.ongoing} />
+                        <Section
+                            title="Ongoing"
+                            data={grouped.ongoing}
+                            onChanged={() => {
+                                // refetch to reflect updates
+                                (async () => {
+                                    try {
+                                        setLoading(true);
+                                        const { data, error } = await supabase
+                                            .from("rental_transactions")
+                                            .select(
+                                                "rental_id,item_id,start_date,end_date,total_cost,status,items(title)"
+                                            )
+                                            .eq("renter_id", user.id)
+                                            .order("created_at", {
+                                                ascending: false,
+                                            });
+                                        if (error) throw error;
+                                        setRows(data || []);
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                })();
+                            }}
+                        />
                         <Separator />
                         <Section title="Completed" data={grouped.completed} />
                     </div>
@@ -77,7 +104,7 @@ export default function MyBookings() {
     );
 }
 
-function Section({ title, data }) {
+function Section({ title, data, onChanged }) {
     return (
         <div>
             <h3 className="text-xl font-medium mb-3">{title}</h3>
@@ -123,11 +150,71 @@ function Section({ title, data }) {
                                         ₱{Number(r.total_cost || 0).toFixed(2)}
                                     </span>
                                 </div>
+                                {title === "Ongoing" && isEligibleReturn(r) && (
+                                    <div className="pt-2">
+                                        <MarkReturned
+                                            rental={r}
+                                            onChanged={onChanged}
+                                        />
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     ))}
                 </div>
             )}
         </div>
+    );
+}
+
+function isEligibleReturn(rental) {
+    if (!rental) return false;
+    const now = new Date();
+    const end = new Date(rental.end_date);
+    // Allow renter to mark returned on or after end_date and only for confirmed/ongoing
+    return (
+        end <= now &&
+        ["confirmed", "ongoing"].includes(
+            String(rental.status || "").toLowerCase()
+        )
+    );
+}
+
+function MarkReturned({ rental, onChanged }) {
+    const [submitting, setSubmitting] = useState(false);
+    const toast = useToastApi();
+    const doMark = async () => {
+        try {
+            setSubmitting(true);
+            const { error } = await supabase
+                .from("rental_transactions")
+                .update({
+                    status: "awaiting_owner_confirmation",
+                    renter_return_marked_at: new Date().toISOString(),
+                })
+                .eq("rental_id", rental.rental_id)
+                .in("status", ["confirmed", "ongoing"]);
+            if (error) throw error;
+            toast.success(
+                "Marked as returned. Waiting for owner confirmation."
+            );
+            onChanged && onChanged();
+        } catch (e) {
+            toast.error(
+                `Could not mark returned: ${e.message || "Unknown error"}`
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
+    return (
+        <Button
+            size="sm"
+            onClick={doMark}
+            disabled={submitting}
+            className="cursor-pointer"
+        >
+            {submitting ? "Marking…" : "Mark as Returned"}
+        </Button>
     );
 }
