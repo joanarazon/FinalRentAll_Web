@@ -44,9 +44,9 @@ export function UserProvider({ children }) {
         (async () => {
             try {
                 setLoading(true);
-                // Try Supabase session first
-                const { data } = await supabase.auth.getUser();
-                const authUser = data?.user || null;
+                // Prefer session to avoid transient null user on hard refresh
+                const { data: sessionData } = await supabase.auth.getSession();
+                const authUser = sessionData?.session?.user || null;
                 if (authUser) {
                     const minimal = { id: authUser.id, email: authUser.email };
                     if (mounted) setUser(minimal);

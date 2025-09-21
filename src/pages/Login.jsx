@@ -17,20 +17,41 @@ function Login() {
     const location = useLocation();
     const from = location.state?.from?.pathname;
 
+    const isAdminPath = (p = "") => {
+        if (!p) return false;
+        if (p.startsWith("/admin")) return true;
+        const adminSet = new Set([
+            "/adminhome",
+            "/pending-users",
+            "/pending-items",
+            "/renting-history",
+        ]);
+        return adminSet.has(p);
+    };
+
     const navigateAfterLogin = (role) => {
         // If a previous route exists, prefer returning there, but keep role safety
         if (from) {
-            // Admins should land on admin area; users on user area
-            const isAdminRoute = from.startsWith("/admin");
-            if (role === "admin" && isAdminRoute)
+            const isAdminRoute = isAdminPath(from);
+            if (role === "admin") {
+                // Admins can return to admin routes; otherwise send to admin home
+                return navigate(isAdminRoute ? from : "/adminhome", {
+                    replace: true,
+                });
+            }
+            if (role === "user") {
+                // Users attempting to access admin should go to Not Authorized
+                if (isAdminRoute)
+                    return navigate("/not-authorized", { replace: true });
                 return navigate(from, { replace: true });
-            if (role === "user" && !isAdminRoute)
-                return navigate(from, { replace: true });
+            }
+            // Unknown role is unauthorized
+            return navigate("/not-authorized", { replace: true });
         }
         // Fallback by role
         if (role === "admin") return navigate("/adminhome", { replace: true });
         if (role === "user") return navigate("/home", { replace: true });
-        return navigate("/", { replace: true });
+        return navigate("/not-authorized", { replace: true });
     };
     const toast = useToastApi();
 

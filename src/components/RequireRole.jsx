@@ -14,20 +14,19 @@ export default function RequireRole({
     const toast = useToastApi();
     const notifiedRef = useRef(false);
 
-    if (loading) return <Loading />;
+    const role = user?.role;
+    const needsRole = allow.length > 0;
+    const unauthorized = !user || (needsRole && !allow.includes(role));
 
     useEffect(() => {
-        const role = user?.role;
-        const unauthorized =
-            !user || (allow.length > 0 && !allow.includes(role));
-        if (unauthorized && !notifiedRef.current) {
+        if (!loading && unauthorized && !notifiedRef.current) {
             notifiedRef.current = true;
             toast.info("You need additional permissions to access this page");
         }
-    }, [user, allow, toast]);
+    }, [loading, unauthorized, toast]);
 
-    const role = user?.role;
-    if (!user || (allow.length > 0 && !allow.includes(role))) {
+    if (loading) return <Loading />;
+    if (unauthorized) {
         return <Navigate to={to} replace state={{ from: location }} />;
     }
     return children;
