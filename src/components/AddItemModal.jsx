@@ -26,6 +26,7 @@ export default function AddItemModal({
         deposit_fee: "0",
         location: "",
         available: true,
+        quantity: "1",
     });
     const [imageFile, setImageFile] = useState(null);
 
@@ -73,6 +74,9 @@ export default function AddItemModal({
                 available: !!form.available,
                 category_id: form.category_id ? Number(form.category_id) : null,
                 main_image_url: null,
+                quantity: form.quantity
+                    ? Math.max(1, parseInt(form.quantity, 10) || 1)
+                    : 1,
             };
 
             const { data: inserted, error: insertErr } = await supabase
@@ -138,6 +142,7 @@ export default function AddItemModal({
                 deposit_fee: "0",
                 location: "",
                 available: true,
+                quantity: "1",
             });
             setImageFile(null);
             onOpenChange(false);
@@ -217,6 +222,17 @@ export default function AddItemModal({
                                 min="0"
                                 step="0.01"
                                 value={form.deposit_fee}
+                                onChange={onChange}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm">Quantity</label>
+                            <Input
+                                name="quantity"
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={form.quantity}
                                 onChange={onChange}
                             />
                         </div>

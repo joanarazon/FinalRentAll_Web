@@ -67,7 +67,7 @@ function Home() {
         try {
             // First attempt: include item_status and filter to approved.
             let baseSelect =
-                "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,available,created_at,item_status";
+                "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,available,created_at,item_status,quantity";
             let query = supabase
                 .from("items")
                 .select(baseSelect)
@@ -90,7 +90,7 @@ function Home() {
                 let fallbackQuery = supabase
                     .from("items")
                     .select(
-                        "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,available,created_at"
+                        "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,available,created_at,quantity"
                     )
                     .eq("available", true)
                     .order("created_at", { ascending: false });
@@ -116,6 +116,7 @@ function Home() {
                         location: it.location || "",
                         date: new Date(it.created_at).toLocaleDateString(),
                         price: String(it.price_per_day),
+                        quantity: Number(it.quantity) || 1,
                         imageUrl: imageUrl,
                         raw: it,
                     };
@@ -269,6 +270,7 @@ function Home() {
                                 location={item.location}
                                 date={item.date}
                                 price={item.price}
+                                quantity={item.quantity}
                                 imageUrl={item.imageUrl}
                                 isOwner={user?.id === item.ownerId}
                                 isFavorited={isFavorited}
