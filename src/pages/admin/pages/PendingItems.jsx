@@ -45,7 +45,7 @@ export default function PendingItems() {
             let query = supabase
                 .from("items")
                 .select(
-                    "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,created_at,main_image_url,item_status"
+                    "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,created_at,main_image_url,item_status,quantity"
                 )
                 .order("created_at", { ascending: false });
 
@@ -64,7 +64,7 @@ export default function PendingItems() {
                 const fb = await supabase
                     .from("items")
                     .select(
-                        "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,created_at,main_image_url"
+                        "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,created_at,main_image_url,quantity"
                     )
                     .order("created_at", { ascending: false });
                 data = fb.data;
@@ -271,6 +271,7 @@ export default function PendingItems() {
                             <th className="p-2">Item ID</th>
                             <th className="p-2">Request Date</th>
                             <th className="p-2">Item Name</th>
+                            <th className="p-2">Quantity</th>
                             <th className="p-2">Submitted Photo</th>
                             <th className="p-2">Description</th>
                             <th className="p-2">Action</th>
@@ -337,6 +338,9 @@ export default function PendingItems() {
                                                     None
                                                 </span>
                                             )}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {Number(it.quantity) || 1}
                                         </td>
                                         <td
                                             className="p-2 text-gray-700 text-sm max-w-[250px] truncate"
@@ -448,6 +452,10 @@ export default function PendingItems() {
                                             previewItem.deposit_fee || 0
                                         ).toFixed(2)}
                                     </p>
+                                </div>
+                                <div>
+                                    <p className="font-medium">Quantity</p>
+                                    <p>{Number(previewItem.quantity) || 1}</p>
                                 </div>
                                 {previewItem.location && (
                                     <div className="col-span-2">
