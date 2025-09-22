@@ -15,17 +15,38 @@ export function DialogOverlay(props) {
     );
 }
 
-export function DialogContent({ className = "", children, ...props }) {
+export function DialogContent({ className = "", children, title, ...props }) {
+    const childrenArray = React.Children.toArray(children);
+    const hasDescription = childrenArray.some(
+        (child) =>
+            React.isValidElement(child) &&
+            (child.type === DialogDescription ||
+                child.type === DialogPrimitive.Description)
+    );
+    const hasTitle = childrenArray.some(
+        (child) =>
+            React.isValidElement(child) &&
+            (child.type === DialogTitle || child.type === DialogPrimitive.Title)
+    );
+
+    const computedTitle = title || props["aria-label"] || "Dialog";
+
     return (
         <DialogPrimitive.Portal>
             <DialogOverlay />
             <DialogPrimitive.Content
                 {...props}
+                {...(!hasDescription ? { "aria-describedby": undefined } : {})}
                 className={
                     "fixed z-50 left-1/2 top-1/2 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white p-4 shadow-lg outline-none data-[state=open]:animate-in data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 border " +
                     className
                 }
             >
+                {!hasTitle ? (
+                    <DialogPrimitive.Title className="sr-only">
+                        {computedTitle}
+                    </DialogPrimitive.Title>
+                ) : null}
                 {children}
             </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
