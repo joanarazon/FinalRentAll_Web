@@ -41,23 +41,29 @@ export function UserProvider({ children }) {
 
     useEffect(() => {
         let mounted = true;
+        const refreshFromSession = async () => {
+            try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                const authUser = sessionData?.session?.user || null;
+                if (authUser) {
+                    // Keep current user if same id; otherwise refresh
+                    if (!user || user.id !== authUser.id || !user.role) {
+                        const merged = await loadProfile(authUser);
+                        if (mounted && merged) setUser(merged);
+                    }
+                } else {
+                    localStorage.removeItem("loggedInUser");
+                    if (mounted) setUser(null);
+                }
+            } catch (_) {
+                // ignore
+            }
+        };
         (async () => {
             try {
                 setLoading(true);
                 // Prefer session to avoid transient null user on hard refresh
-                const { data: sessionData } = await supabase.auth.getSession();
-                const authUser = sessionData?.session?.user || null;
-                if (authUser) {
-                    const minimal = { id: authUser.id, email: authUser.email };
-                    if (mounted) setUser(minimal);
-                    // Enhance with profile and wait so role is known before clearing loading
-                    const merged = await loadProfile(authUser);
-                    if (mounted && merged) setUser(merged);
-                } else {
-                    // Fallback to localStorage compatibility
-                    const stored = localStorage.getItem("loggedInUser");
-                    if (stored && mounted) setUser(JSON.parse(stored));
-                }
+                await refreshFromSession();
             } finally {
                 if (mounted) setLoading(false);
             }
@@ -85,9 +91,17 @@ export function UserProvider({ children }) {
             }
         );
 
+        const onVisibility = () => {
+            if (document.visibilityState === "visible") {
+                refreshFromSession();
+            }
+        };
+        document.addEventListener("visibilitychange", onVisibility);
+
         return () => {
             mounted = false;
             sub.subscription?.unsubscribe?.();
+            document.removeEventListener("visibilitychange", onVisibility);
         };
     }, []);
 

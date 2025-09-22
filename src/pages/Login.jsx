@@ -6,6 +6,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useToastApi } from "../components/ui/toast";
 
 function Login() {
+    const MIN_NAV_DELAY = 300; // ms
+    const delay = (ms) => new Promise((res) => setTimeout(res, ms));
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loginMethod, setLoginMethod] = useState("password"); // password | email_otp | sms_otp
@@ -92,7 +94,8 @@ function Login() {
 
             if (profile.role === "unverified") {
                 toast.info("Your account is pending admin verification.");
-                return; // stop here, don't navigate
+                await delay(MIN_NAV_DELAY);
+                return navigate("/pending-verification", { replace: true });
             }
 
             // Store combined auth + profile in localStorage (omit sensitive fields; none here)
@@ -107,6 +110,7 @@ function Login() {
             const greetingName =
                 profile?.first_name || authUser.email || "there";
             toast.success(`Welcome back, ${greetingName}!`);
+            await delay(MIN_NAV_DELAY);
             navigateAfterLogin(profile.role);
         } catch (err) {
             console.error("Login error:", err.message);
@@ -181,7 +185,8 @@ function Login() {
 
             if (profile.role === "unverified") {
                 toast.info("Your account is pending admin verification.");
-                return; // stop here, don't navigate
+                await delay(MIN_NAV_DELAY);
+                return navigate("/pending-verification", { replace: true });
             }
 
             const userInfo = {
@@ -192,6 +197,7 @@ function Login() {
             localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
 
             toast.success("Signed in successfully with email OTP");
+            await delay(MIN_NAV_DELAY);
             navigateAfterLogin(profile.role);
         } catch (err) {
             console.error("OTP verify error:", err.message);

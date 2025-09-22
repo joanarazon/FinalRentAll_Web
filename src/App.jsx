@@ -25,14 +25,20 @@ import MyBookings from "./pages/MyBookings";
 import MyRatings from "./pages/MyRatings";
 import { useUserContext } from "./context/UserContext.jsx";
 import Loading from "./components/Loading.jsx";
+import PendingVerification from "./pages/PendingVerification.jsx";
 
 function RoleAwareLanding() {
     const { user, loading } = useUserContext();
     if (loading) return <Loading />;
     const role = user?.role;
+    if (!user) return <Login />;
+    if (typeof role === "undefined") return <Loading />;
     if (role === "admin") return <Navigate to="/adminhome" replace />;
     if (role === "user") return <Navigate to="/home" replace />;
-    return <Login />;
+    if (role === "unverified")
+        return <Navigate to="/pending-verification" replace />;
+    // Any other unknown/rejected roles
+    return <Navigate to="/not-authorized" replace />;
 }
 
 export default class App extends Component {
@@ -43,6 +49,10 @@ export default class App extends Component {
                     <Route path="/" element={<RoleAwareLanding />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/not-authorized" element={<NotAuthorized />} />
+                    <Route
+                        path="/pending-verification"
+                        element={<PendingVerification />}
+                    />
                     {/* User group */}
                     <Route
                         element={

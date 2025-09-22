@@ -22,11 +22,7 @@ export default function AdminSidebarMenu() {
 
     const linkClass = (to) =>
         `justify-start w-full ${
-            location.pathname === to ||
-            (to === "/admin/pending-users" &&
-                location.pathname === "/adminhome")
-                ? "bg-gray-200 font-bold"
-                : ""
+            location.pathname === to ? "bg-gray-200 font-bold" : ""
         }`;
 
     return (
