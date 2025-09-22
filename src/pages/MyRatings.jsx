@@ -5,6 +5,7 @@ import { supabase } from "../../supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Loading from "@/components/Loading";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 
 export default function MyRatings() {
     const user = useUser();
@@ -24,7 +25,15 @@ export default function MyRatings() {
                 ] = await Promise.all([
                     supabase
                         .from("rental_transactions")
-                        .select("item_id,rental_id,items(title,user_id)")
+                        .select(
+                            `item_id,rental_id,
+                             items (
+                               title,
+                               user_id,
+                               main_image_url,
+                               owner:users ( first_name, last_name )
+                             )`
+                        )
                         .eq("renter_id", user.id)
                         .eq("status", "completed"),
                     supabase
@@ -48,6 +57,10 @@ export default function MyRatings() {
 
     if (!user) return null;
 
+    const filtered = completed.filter((r) =>
+        (r.items?.title || "").toLowerCase().includes(search.toLowerCase())
+    );
+
     return (
         <div className="min-h-screen bg-[#FFFBF2]">
             <TopMenu
@@ -61,19 +74,30 @@ export default function MyRatings() {
                     <Loading />
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {completed.length === 0 ? (
+                        {filtered.length === 0 ? (
                             <p className="text-sm text-gray-600">
                                 No completed rentals yet.
                             </p>
                         ) : (
-                            completed.map((r) => (
+                            filtered.map((r) => (
                                 <Card key={`${r.rental_id}-${r.item_id}`}>
                                     <CardHeader>
-                                        <CardTitle className="text-base">
-                                            {r.items?.title || "Item"}
+                                        <CardTitle className="text-base flex items-center gap-3">
+                                            <ImagePreviewThumb
+                                                src={r.items?.main_image_url}
+                                                alt={r.items?.title}
+                                            />
+                                            <span>
+                                                {r.items?.title || "Item"}
+                                            </span>
                                         </CardTitle>
                                     </CardHeader>
                                     <CardContent>
+                                        <div className="text-sm text-gray-700 mb-3">
+                                            Owner:{" "}
+                                            {r.items?.owner?.first_name || ""}{" "}
+                                            {r.items?.owner?.last_name || ""}
+                                        </div>
                                         {existing[r.rental_id] ? (
                                             <p className="text-sm text-green-700">
                                                 You already reviewed this item.
@@ -97,6 +121,29 @@ export default function MyRatings() {
     );
 }
 
+function ImagePreviewThumb({ src, alt }) {
+    const imgSrc = src || "/vite.svg";
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <img
+                    src={imgSrc}
+                    alt={alt || "Item"}
+                    className="w-12 h-12 object-cover rounded-md border cursor-pointer"
+                    onError={(e) => (e.currentTarget.style.display = "none")}
+                />
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl p-0">
+                <img
+                    src={imgSrc}
+                    alt={alt || "Item"}
+                    className="w-full h-auto rounded-md"
+                />
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function RatingForm({ itemId, rentalId, revieweeId, userId }) {
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState("");
@@ -108,16 +155,14 @@ function RatingForm({ itemId, rentalId, revieweeId, userId }) {
         if (!rating) return;
         try {
             setSubmitting(true);
-            const { error } = await supabase
-                .from("reviews")
-                .insert({
-                    item_id: itemId,
-                    rental_id: rentalId,
-                    reviewer_id: userId,
-                    reviewee_id: revieweeId,
-                    rating,
-                    comment,
-                });
+            const { error } = await supabase.from("reviews").insert({
+                item_id: itemId,
+                rental_id: rentalId,
+                reviewer_id: userId,
+                reviewee_id: revieweeId,
+                rating,
+                comment,
+            });
             if (error) throw error;
             setSubmitted(true);
         } finally {

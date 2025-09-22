@@ -7,6 +7,14 @@ import { Button } from "@/components/ui/button";
 import { useToastApi } from "@/components/ui/toast";
 import { Separator } from "@/components/ui/separator";
 import Loading from "@/components/Loading";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+    DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function MyBookings() {
     const user = useUser();
@@ -23,7 +31,14 @@ export default function MyBookings() {
                 const { data, error } = await supabase
                     .from("rental_transactions")
                     .select(
-                        "rental_id,item_id,start_date,end_date,total_cost,status,items(title)"
+                        `rental_id,item_id,start_date,end_date,total_cost,status,
+                         renter:renter_id ( first_name, last_name ),
+                         items (
+                           title,
+                           main_image_url,
+                           user_id,
+                           owner:users ( first_name, last_name )
+                         )`
                     )
                     .eq("renter_id", user.id)
                     .order("created_at", { ascending: false });
@@ -81,7 +96,14 @@ export default function MyBookings() {
                                         const { data, error } = await supabase
                                             .from("rental_transactions")
                                             .select(
-                                                "rental_id,item_id,start_date,end_date,total_cost,status,items(title)"
+                                                `rental_id,item_id,start_date,end_date,total_cost,status,
+                                                                                                 renter:renter_id ( first_name, last_name ),
+                                                                                                 items (
+                                                                                                     title,
+                                                                                                     main_image_url,
+                                                                                                     user_id,
+                                                                                                     owner:users ( first_name, last_name )
+                                                                                                 )`
                                             )
                                             .eq("renter_id", user.id)
                                             .order("created_at", {
@@ -117,8 +139,12 @@ function Section({ title, data, onChanged }) {
                     {data.map((r) => (
                         <Card key={r.rental_id}>
                             <CardHeader>
-                                <CardTitle className="text-base">
-                                    {r.items?.title || "Item"}
+                                <CardTitle className="text-base flex items-center gap-3">
+                                    <ImagePreviewThumb
+                                        src={r.items?.main_image_url}
+                                        alt={r.items?.title}
+                                    />
+                                    <span>{r.items?.title || "Item"}</span>
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="text-sm space-y-1">
@@ -139,6 +165,24 @@ function Section({ title, data, onChanged }) {
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
+                                    <span>Owner</span>
+                                    <span>
+                                        {r.items?.owner?.first_name || ""}{" "}
+                                        {r.items?.owner?.last_name || ""}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Renter</span>
+                                    <span>
+                                        {r.renter?.first_name ||
+                                            user?.first_name ||
+                                            "You"}{" "}
+                                        {r.renter?.last_name ||
+                                            user?.last_name ||
+                                            ""}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
                                     <span>Status</span>
                                     <span className="capitalize">
                                         {r.status}
@@ -150,14 +194,16 @@ function Section({ title, data, onChanged }) {
                                         ₱{Number(r.total_cost || 0).toFixed(2)}
                                     </span>
                                 </div>
-                                {title === "Ongoing" && isEligibleReturn(r) && (
-                                    <div className="pt-2">
-                                        <MarkReturned
-                                            rental={r}
-                                            onChanged={onChanged}
-                                        />
-                                    </div>
-                                )}
+                                <div className="pt-2 flex gap-2">
+                                    <DetailsModal rental={r} />
+                                    {title === "Ongoing" &&
+                                        isEligibleReturn(r) && (
+                                            <MarkReturned
+                                                rental={r}
+                                                onChanged={onChanged}
+                                            />
+                                        )}
+                                </div>
                             </CardContent>
                         </Card>
                     ))}
@@ -216,5 +262,92 @@ function MarkReturned({ rental, onChanged }) {
         >
             {submitting ? "Marking…" : "Mark as Returned"}
         </Button>
+    );
+}
+
+function ImagePreviewThumb({ src, alt }) {
+    const imgSrc = src || "/vite.svg";
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <img
+                    src={imgSrc}
+                    alt={alt || "Item"}
+                    className="w-12 h-12 object-cover rounded-md border cursor-pointer"
+                    onError={(e) => (e.currentTarget.style.display = "none")}
+                />
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl p-0">
+                <img
+                    src={imgSrc}
+                    alt={alt || "Item"}
+                    className="w-full h-auto rounded-md"
+                />
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function DetailsModal({ rental }) {
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="cursor-pointer">
+                    View Details
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>
+                        {rental.items?.title || "Item Details"}
+                    </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                        <span>Owner</span>
+                        <span>
+                            {rental.items?.owner?.first_name || ""}{" "}
+                            {rental.items?.owner?.last_name || ""}
+                        </span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Renter</span>
+                        <span>
+                            {rental.renter?.first_name || "You"}{" "}
+                            {rental.renter?.last_name || ""}
+                        </span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Start</span>
+                        <span>
+                            {new Date(rental.start_date).toLocaleDateString()}
+                        </span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>End</span>
+                        <span>
+                            {new Date(rental.end_date).toLocaleDateString()}
+                        </span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Status</span>
+                        <span className="capitalize">{rental.status}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Total</span>
+                        <span>
+                            ₱{Number(rental.total_cost || 0).toFixed(2)}
+                        </span>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogTrigger asChild>
+                        <Button variant="outline" className="cursor-pointer">
+                            Close
+                        </Button>
+                    </DialogTrigger>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }

@@ -6,6 +6,14 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
 import TopMenu from "../components/topMenu";
 import { useToastApi } from "@/components/ui/toast";
+import {
+    Dialog,
+    DialogContent,
+    DialogTrigger,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function OwnerBookingRequests({
     favorites,
@@ -27,7 +35,7 @@ export default function OwnerBookingRequests({
                 .from("rental_transactions")
                 .select(
                     `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,
-                     items!inner(title,user_id),
+                     items!inner(title,user_id,main_image_url),
                      renter:renter_id ( first_name,last_name )`
                 )
                 .eq("items.user_id", user.id)
@@ -44,7 +52,7 @@ export default function OwnerBookingRequests({
                 .from("rental_transactions")
                 .select(
                     `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,renter_return_marked_at,
-                     items!inner(title,user_id),
+                     items!inner(title,user_id,main_image_url),
                      renter:renter_id ( first_name,last_name )`
                 )
                 .eq("items.user_id", user.id)
@@ -218,7 +226,19 @@ export default function OwnerBookingRequests({
                                 {rows.map((r) => (
                                     <tr key={r.rental_id} className="border-b">
                                         <td className="p-2 text-sm">
-                                            {r.items?.title || r.item_id}
+                                            <div className="flex items-center gap-2">
+                                                <ImagePreviewThumb
+                                                    src={
+                                                        r.items?.main_image_url
+                                                    }
+                                                    alt={r.items?.title}
+                                                    size={40}
+                                                />
+                                                <span>
+                                                    {r.items?.title ||
+                                                        r.item_id}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="p-2 text-sm">
                                             {r.renter?.first_name}{" "}
@@ -241,6 +261,7 @@ export default function OwnerBookingRequests({
                                         </td>
                                         <td className="p-2">
                                             <div className="flex gap-2">
+                                                <RequestDetailsDialog row={r} />
                                                 <Button
                                                     size="sm"
                                                     className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
@@ -310,7 +331,19 @@ export default function OwnerBookingRequests({
                                 {awaiting.map((r) => (
                                     <tr key={r.rental_id} className="border-b">
                                         <td className="p-2 text-sm">
-                                            {r.items?.title || r.item_id}
+                                            <div className="flex items-center gap-2">
+                                                <ImagePreviewThumb
+                                                    src={
+                                                        r.items?.main_image_url
+                                                    }
+                                                    alt={r.items?.title}
+                                                    size={40}
+                                                />
+                                                <span>
+                                                    {r.items?.title ||
+                                                        r.item_id}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="p-2 text-sm">
                                             {r.renter?.first_name}{" "}
@@ -334,6 +367,10 @@ export default function OwnerBookingRequests({
                                         </td>
                                         <td className="p-2">
                                             <div className="flex gap-2">
+                                                <RequestDetailsDialog
+                                                    row={r}
+                                                    awaiting
+                                                />
                                                 <Button
                                                     size="sm"
                                                     className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
@@ -381,5 +418,89 @@ export default function OwnerBookingRequests({
                 </div>
             </div>
         </div>
+    );
+}
+
+function ImagePreviewThumb({ src, alt, size = 40 }) {
+    const imgSrc = src || "/vite.svg";
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <img
+                    src={imgSrc}
+                    alt={alt || "Item"}
+                    className="object-cover rounded border cursor-pointer"
+                    style={{ width: size, height: size }}
+                    onError={(e) => (e.currentTarget.style.display = "none")}
+                />
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl p-0">
+                <img
+                    src={imgSrc}
+                    alt={alt || "Item"}
+                    className="w-full h-auto rounded-md"
+                />
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function RequestDetailsDialog({ row, awaiting = false }) {
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="cursor-pointer">
+                    View
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>
+                        {row.items?.title || "Request Details"}
+                    </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                        <span>Renter</span>
+                        <span>
+                            {row.renter?.first_name || ""}{" "}
+                            {row.renter?.last_name || ""}
+                        </span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Start</span>
+                        <span>
+                            {new Date(row.start_date).toLocaleDateString()}
+                        </span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>End</span>
+                        <span>
+                            {new Date(row.end_date).toLocaleDateString()}
+                        </span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Status</span>
+                        <span className="capitalize">{row.status}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Total</span>
+                        <span>₱{Number(row.total_cost || 0).toFixed(2)}</span>
+                    </div>
+                    {awaiting && (
+                        <div className="flex justify-between">
+                            <span>Renter Marked</span>
+                            <span>
+                                {row.renter_return_marked_at
+                                    ? new Date(
+                                          row.renter_return_marked_at
+                                      ).toLocaleString()
+                                    : "—"}
+                            </span>
+                        </div>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
