@@ -11,6 +11,7 @@ const UserContext = createContext({
     user: null,
     loading: true,
     logout: async () => {},
+    refresh: async () => {},
 });
 
 export function UserProvider({ children }) {
@@ -37,6 +38,20 @@ export function UserProvider({ children }) {
         };
         localStorage.setItem("loggedInUser", JSON.stringify(merged));
         return merged;
+    };
+
+    const refresh = async () => {
+        try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const authUser = sessionData?.session?.user || null;
+            if (authUser) {
+                const merged = await loadProfile(authUser);
+                if (merged) setUser(merged);
+            } else {
+                localStorage.removeItem("loggedInUser");
+                setUser(null);
+            }
+        } catch (_) {}
     };
 
     useEffect(() => {
@@ -111,7 +126,10 @@ export function UserProvider({ children }) {
         setUser(null);
     };
 
-    const value = useMemo(() => ({ user, loading, logout }), [user, loading]);
+    const value = useMemo(
+        () => ({ user, loading, logout, refresh }),
+        [user, loading]
+    );
     return (
         <UserContext.Provider value={value}>{children}</UserContext.Provider>
     );

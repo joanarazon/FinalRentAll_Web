@@ -44,7 +44,9 @@ function Register() {
             }
         } catch (err) {
             console.error("Camera error:", err);
-            toast.error("Unable to access camera. Please check your device permissions and try again.");
+            toast.error(
+                "Unable to access camera. Please check your device permissions and try again."
+            );
         }
     };
 
@@ -559,47 +561,71 @@ function Register() {
 
                         {/* OTP Input */}
                         <div className="flex justify-center">
-                            <InputOTP
-                                maxLength={6}
-                                className="flex gap-3"
-                                value={formData.otp}
-                                onChange={(value) =>
-                                    setFormData((prev) => ({
-                                        ...prev,
-                                        otp: value,
-                                    }))
-                                }
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    if (
+                                        formData.otp &&
+                                        String(formData.otp).trim().length > 0
+                                    ) {
+                                        handleNext();
+                                    }
+                                }}
                             >
-                                <InputOTPGroup>
-                                    <InputOTPSlot
-                                        index={0}
-                                        className="w-14 h-14 text-xl"
-                                    />
-                                    <InputOTPSlot
-                                        index={1}
-                                        className="w-14 h-14 text-xl"
-                                    />
-                                    <InputOTPSlot
-                                        index={2}
-                                        className="w-14 h-14 text-xl"
-                                    />
-                                </InputOTPGroup>
-                                <InputOTPSeparator />
-                                <InputOTPGroup>
-                                    <InputOTPSlot
-                                        index={3}
-                                        className="w-14 h-14 text-xl"
-                                    />
-                                    <InputOTPSlot
-                                        index={4}
-                                        className="w-14 h-14 text-xl"
-                                    />
-                                    <InputOTPSlot
-                                        index={5}
-                                        className="w-14 h-14 text-xl"
-                                    />
-                                </InputOTPGroup>
-                            </InputOTP>
+                                <InputOTP
+                                    maxLength={6}
+                                    className="flex gap-3"
+                                    value={formData.otp}
+                                    onChange={(value) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            otp: value,
+                                        }))
+                                    }
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            if (
+                                                formData.otp &&
+                                                String(formData.otp).trim()
+                                                    .length > 0
+                                            ) {
+                                                handleNext();
+                                            }
+                                        }
+                                    }}
+                                >
+                                    <InputOTPGroup>
+                                        <InputOTPSlot
+                                            index={0}
+                                            className="w-14 h-14 text-xl"
+                                        />
+                                        <InputOTPSlot
+                                            index={1}
+                                            className="w-14 h-14 text-xl"
+                                        />
+                                        <InputOTPSlot
+                                            index={2}
+                                            className="w-14 h-14 text-xl"
+                                        />
+                                    </InputOTPGroup>
+                                    <InputOTPSeparator />
+                                    <InputOTPGroup>
+                                        <InputOTPSlot
+                                            index={3}
+                                            className="w-14 h-14 text-xl"
+                                        />
+                                        <InputOTPSlot
+                                            index={4}
+                                            className="w-14 h-14 text-xl"
+                                        />
+                                        <InputOTPSlot
+                                            index={5}
+                                            className="w-14 h-14 text-xl"
+                                        />
+                                    </InputOTPGroup>
+                                </InputOTP>
+                            </form>
                         </div>
 
                         {/* Change email link */}

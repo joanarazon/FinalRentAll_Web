@@ -180,7 +180,10 @@ export default function TopMenu({
                         {user ? (
                             <Avatar className="cursor-pointer">
                                 <AvatarImage
-                                    src={user.face_image_url}
+                                    src={
+                                        user.profile_pic_url ||
+                                        user.face_image_url
+                                    }
                                     alt="Profile"
                                 />
                                 <AvatarFallback className="cursor-pointer">
@@ -195,7 +198,10 @@ export default function TopMenu({
                         )}
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="cursor-pointer">
+                        <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={() => navigate("/profile")}
+                        >
                             Profile
                         </DropdownMenuItem>
                         <DropdownMenuItem className="cursor-pointer">
