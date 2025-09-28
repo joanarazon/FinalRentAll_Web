@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "../../supabaseClient";
+import { getLessorRatingStats } from "@/lib/reviews";
 
 export default function BookItemModal({
     open,
@@ -49,6 +50,8 @@ export default function BookItemModal({
     const [reviews, setReviews] = useState([]);
     const [reviewsLoading, setReviewsLoading] = useState(false);
     const [reviewsError, setReviewsError] = useState("");
+    const [ownerRating, setOwnerRating] = useState({ average: 0, count: 0 });
+    const [ownerRatingLoading, setOwnerRatingLoading] = useState(false);
 
     const today = useMemo(() => {
         const d = new Date();
@@ -122,6 +125,21 @@ export default function BookItemModal({
     }, [open, item?.user_id]);
 
     useEffect(() => {
+        if (!open || !item?.user_id) return;
+        (async () => {
+            try {
+                setOwnerRatingLoading(true);
+                const stats = await getLessorRatingStats(item.user_id);
+                setOwnerRating(stats);
+            } catch {
+                setOwnerRating({ average: 0, count: 0 });
+            } finally {
+                setOwnerRatingLoading(false);
+            }
+        })();
+    }, [open, item?.user_id]);
+
+    useEffect(() => {
         if (!open) {
             setRange({ from: undefined, to: undefined });
             setRemaining(null);
@@ -155,7 +173,11 @@ export default function BookItemModal({
                     .from("rental_transactions")
                     .select("*", { count: "exact", head: true })
                     .eq("item_id", item.item_id)
-                    .in("status", ["confirmed", "ongoing"])
+                    .in("status", [
+                        "confirmed",
+                        "ongoing",
+                        "awaiting_owner_confirmation",
+                    ])
                     .lte("start_date", toStr)
                     .gte("end_date", fromStr);
                 const overlaps = Number(count || 0);
@@ -540,6 +562,10 @@ export default function BookItemModal({
                                             : "—"}
                                     </span>
                                 </div>
+                                <div className="flex justify-between">
+                                    <span>Units involved</span>
+                                    <span>{requestedUnits || 1}</span>
+                                </div>
                                 <div className="flex items-center justify-between gap-2 mt-1">
                                     <label className="text-sm">
                                         Units to book
@@ -617,6 +643,28 @@ export default function BookItemModal({
                                                     owner.first_name || ""
                                                 ).trim()}{" "}
                                                 {(owner.last_name || "").trim()}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span>Rating</span>
+                                            <span className="flex items-center gap-2">
+                                                <StarRow
+                                                    value={
+                                                        ownerRating.average || 0
+                                                    }
+                                                />
+                                                <span className="text-xs text-gray-600">
+                                                    {ownerRatingLoading
+                                                        ? "Loading..."
+                                                        : `(${
+                                                              ownerRating.count
+                                                          } ${
+                                                              ownerRating.count ===
+                                                              1
+                                                                  ? "review"
+                                                                  : "reviews"
+                                                          })`}
+                                                </span>
                                             </span>
                                         </div>
                                         <div className="flex justify-between">

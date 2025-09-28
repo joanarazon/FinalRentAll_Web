@@ -126,6 +126,32 @@ export default function OwnerBookingRequests({
         }
     };
 
+    // Mark owner confirmation but keep status awaiting_owner_confirmation
+    // This keeps capacity reserved (held for maintenance) per current availability rules.
+    const holdReturn = async (txId) => {
+        setActionId(txId);
+        try {
+            const { error } = await supabase
+                .from("rental_transactions")
+                .update({ owner_confirmed_at: new Date().toISOString() })
+                .eq("rental_id", txId)
+                .eq("status", "awaiting_owner_confirmation");
+            if (error) {
+                toast.error(`Hold failed: ${error.message || "Unknown error"}`);
+                throw error;
+            } else {
+                toast.info(
+                    "Return confirmed and item placed on hold (maintenance)."
+                );
+            }
+        } catch (e) {
+            console.error("Hold return failed:", e.message);
+        } finally {
+            setActionId(null);
+            fetchData();
+        }
+    };
+
     const reportIssue = async (txId) => {
         setActionId(txId);
         try {
@@ -371,25 +397,72 @@ export default function OwnerBookingRequests({
                                                     row={r}
                                                     awaiting
                                                 />
-                                                <Button
-                                                    size="sm"
-                                                    className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
-                                                    disabled={
-                                                        actionId === r.rental_id
-                                                    }
-                                                    onClick={() =>
-                                                        confirmReturn(
+                                                {r.owner_confirmed_at ? (
+                                                    <Button
+                                                        size="sm"
+                                                        className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
+                                                        disabled={
+                                                            actionId ===
                                                             r.rental_id
-                                                        )
-                                                    }
-                                                >
-                                                    {actionId ===
-                                                    r.rental_id ? (
-                                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                                    ) : (
-                                                        "Confirm Return"
-                                                    )}
-                                                </Button>
+                                                        }
+                                                        onClick={() =>
+                                                            confirmReturn(
+                                                                r.rental_id
+                                                            )
+                                                        }
+                                                    >
+                                                        {actionId ===
+                                                        r.rental_id ? (
+                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                        ) : (
+                                                            "Restock Now"
+                                                        )}
+                                                    </Button>
+                                                ) : (
+                                                    <>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="cursor-pointer"
+                                                            disabled={
+                                                                actionId ===
+                                                                r.rental_id
+                                                            }
+                                                            onClick={() =>
+                                                                holdReturn(
+                                                                    r.rental_id
+                                                                )
+                                                            }
+                                                        >
+                                                            {actionId ===
+                                                            r.rental_id ? (
+                                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                            ) : (
+                                                                "Hold (maintenance)"
+                                                            )}
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
+                                                            disabled={
+                                                                actionId ===
+                                                                r.rental_id
+                                                            }
+                                                            onClick={() =>
+                                                                confirmReturn(
+                                                                    r.rental_id
+                                                                )
+                                                            }
+                                                        >
+                                                            {actionId ===
+                                                            r.rental_id ? (
+                                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                            ) : (
+                                                                "Confirm & Restock"
+                                                            )}
+                                                        </Button>
+                                                    </>
+                                                )}
                                                 <Button
                                                     size="sm"
                                                     variant="destructive"
@@ -446,8 +519,49 @@ function ImagePreviewThumb({ src, alt, size = 40 }) {
 }
 
 function RequestDetailsDialog({ row, awaiting = false }) {
+    const [open, setOpen] = useState(false);
+    const [unitsCount, setUnitsCount] = useState(null);
+    const [countLoading, setCountLoading] = useState(false);
+
+    useEffect(() => {
+        if (!open) return;
+        let canceled = false;
+        (async () => {
+            try {
+                setCountLoading(true);
+                const status = awaiting
+                    ? "awaiting_owner_confirmation"
+                    : "pending";
+                const { count, error } = await supabase
+                    .from("rental_transactions")
+                    .select("*", { count: "exact", head: true })
+                    .eq("item_id", row.item_id)
+                    .eq("renter_id", row.renter_id)
+                    .eq("start_date", row.start_date)
+                    .eq("end_date", row.end_date)
+                    .eq("status", status);
+                if (error) throw error;
+                if (!canceled) setUnitsCount(Number(count || 0));
+            } catch (e) {
+                if (!canceled) setUnitsCount(1);
+            } finally {
+                if (!canceled) setCountLoading(false);
+            }
+        })();
+        return () => {
+            canceled = true;
+        };
+    }, [
+        open,
+        row.item_id,
+        row.renter_id,
+        row.start_date,
+        row.end_date,
+        awaiting,
+    ]);
+
     return (
-        <Dialog>
+        <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button size="sm" variant="outline" className="cursor-pointer">
                     View
@@ -487,6 +601,16 @@ function RequestDetailsDialog({ row, awaiting = false }) {
                         <span>Total</span>
                         <span>₱{Number(row.total_cost || 0).toFixed(2)}</span>
                     </div>
+                    <div className="flex justify-between">
+                        <span>Units involved</span>
+                        <span>
+                            {countLoading
+                                ? "Loading…"
+                                : unitsCount != null
+                                ? unitsCount
+                                : "—"}
+                        </span>
+                    </div>
                     {awaiting && (
                         <div className="flex justify-between">
                             <span>Renter Marked</span>
@@ -494,6 +618,18 @@ function RequestDetailsDialog({ row, awaiting = false }) {
                                 {row.renter_return_marked_at
                                     ? new Date(
                                           row.renter_return_marked_at
+                                      ).toLocaleString()
+                                    : "—"}
+                            </span>
+                        </div>
+                    )}
+                    {awaiting && (
+                        <div className="flex justify-between">
+                            <span>Owner Confirmed</span>
+                            <span>
+                                {row.owner_confirmed_at
+                                    ? new Date(
+                                          row.owner_confirmed_at
                                       ).toLocaleString()
                                     : "—"}
                             </span>
