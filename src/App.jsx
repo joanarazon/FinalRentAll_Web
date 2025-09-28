@@ -1,5 +1,11 @@
 import React, { Component } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {
+    BrowserRouter as Router,
+    Routes,
+    Route,
+    Outlet,
+    Navigate,
+} from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Home from "./pages/Home";
@@ -9,29 +15,94 @@ import AdminHome from "./pages/admin/AdminHome";
 import PendingUser from "./pages/admin/pages/PendingUser";
 import PendingItems from "./pages/admin/pages/PendingItems";
 import ViewRentingHistory from "./pages/admin/pages/ViewRentingHistory";
-import PendingBookings from "./pages/admin/pages/PendingBookings";
+// PendingBookings view intentionally hidden from admin routing
+// import PendingBookings from "./pages/admin/pages/PendingBookings";
+import OwnerBookingRequests from "./pages/OwnerBookingRequests";
+import RequireAuth from "./components/RequireAuth.jsx";
+import RequireRole from "./components/RequireRole.jsx";
+import NotAuthorized from "./pages/NotAuthorized.jsx";
+import MyBookings from "./pages/MyBookings";
+import MyRatings from "./pages/MyRatings";
+import Profile from "./pages/Profile";
+import { useUserContext } from "./context/UserContext.jsx";
+import Loading from "./components/Loading.jsx";
+import PendingVerification from "./pages/PendingVerification.jsx";
+
+function RoleAwareLanding() {
+    const { user, loading } = useUserContext();
+    if (loading) return <Loading />;
+    const role = user?.role;
+    if (!user) return <Login />;
+    if (typeof role === "undefined") return <Loading />;
+    if (role === "admin") return <Navigate to="/adminhome" replace />;
+    if (role === "user") return <Navigate to="/home" replace />;
+    if (role === "unverified")
+        return <Navigate to="/pending-verification" replace />;
+    // Any other unknown/rejected roles
+    return <Navigate to="/not-authorized" replace />;
+}
 
 export default class App extends Component {
     render() {
         return (
             <Router>
                 <Routes>
-                    <Route path="/" element={<Login />} />
+                    <Route path="/" element={<RoleAwareLanding />} />
                     <Route path="/register" element={<Register />} />
-                    <Route path="/home" element={<Home />} />
-                    <Route path="/inbox" element={<Inbox />} />
-                    <Route path="/notifications" element={<Notification />} />
-                    <Route path="/adminhome" element={<AdminHome />} />
-                    <Route path="/pending-users" element={<PendingUser />} />
-                    <Route path="/pending-items" element={<PendingItems />} />
+                    <Route path="/not-authorized" element={<NotAuthorized />} />
                     <Route
-                        path="/pending-bookings"
-                        element={<PendingBookings />}
+                        path="/pending-verification"
+                        element={<PendingVerification />}
                     />
+                    {/* User group */}
                     <Route
-                        path="/renting-history"
-                        element={<ViewRentingHistory />}
-                    />
+                        element={
+                            <RequireAuth>
+                                <RequireRole allow={["user"]}>
+                                    <Outlet />
+                                </RequireRole>
+                            </RequireAuth>
+                        }
+                    >
+                        <Route path="/home" element={<Home />} />
+                        <Route path="/inbox" element={<Inbox />} />
+                        <Route
+                            path="/notifications"
+                            element={<Notification />}
+                        />
+                        <Route
+                            path="/booking-requests"
+                            element={<OwnerBookingRequests />}
+                        />
+                        <Route path="/my-bookings" element={<MyBookings />} />
+                        <Route path="/my-ratings" element={<MyRatings />} />
+                        <Route path="/profile" element={<Profile />} />
+                    </Route>
+                    {/* Admin group */}
+                    <Route
+                        element={
+                            <RequireAuth>
+                                <RequireRole allow={["admin"]}>
+                                    <Outlet />
+                                </RequireRole>
+                            </RequireAuth>
+                        }
+                    >
+                        <Route path="/adminhome" element={<AdminHome />} />
+                        <Route
+                            path="/pending-users"
+                            element={<PendingUser />}
+                        />
+                        <Route
+                            path="/pending-items"
+                            element={<PendingItems />}
+                        />
+                        <Route
+                            path="/renting-history"
+                            element={<ViewRentingHistory />}
+                        />
+                    </Route>
+                    {/** Pending Bookings route hidden per product change (handled by lessors) **/}
                 </Routes>
             </Router>
         );

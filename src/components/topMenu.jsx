@@ -1,32 +1,45 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useUser } from "../hooks/useUser";
 import { Heart, Menu } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useUserContext } from "../context/UserContext.jsx";
 
-export default function TopMenu({ activePage, favorites = [], searchTerm, setSearchTerm }) {
+export default function TopMenu({
+    activePage,
+    favorites = [],
+    searchTerm,
+    setSearchTerm,
+}) {
     const user = useUser();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const navigate = useNavigate();
+    const { logout } = useUserContext();
 
     const handleInbox = () => {
-        navigate('/inbox')
-    }
+        navigate("/inbox");
+    };
 
     const handleHome = () => {
-        navigate('/home')
-    }
+        navigate("/home");
+    };
 
     const handleNotification = () => {
-        navigate('/notifications')
-    }
+        navigate("/notifications");
+    };
 
     const linkClass = (page) =>
-        `text-gray-600 hover:text-black ${activePage === page
-            ? "text-black font-bold underline underline-offset-4 decoration-2"
-            : ""
+        `text-gray-600 hover:text-black ${
+            activePage === page
+                ? "text-black font-bold underline underline-offset-4 decoration-2"
+                : ""
         }`;
 
     return (
@@ -37,7 +50,34 @@ export default function TopMenu({ activePage, favorites = [], searchTerm, setSea
 
                 {/* Desktop Links */}
                 <div className="hidden md:flex items-center gap-6">
-                    <Button variant="link" className={`${linkClass("home")} cursor-pointer`} onClick={handleHome}>Home</Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("home")} cursor-pointer`}
+                        onClick={handleHome}
+                    >
+                        Home
+                    </Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("my-bookings")} cursor-pointer`}
+                        onClick={() => navigate("/my-bookings")}
+                    >
+                        My Bookings
+                    </Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("my-ratings")} cursor-pointer`}
+                        onClick={() => navigate("/my-ratings")}
+                    >
+                        Ratings
+                    </Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("requests")} cursor-pointer`}
+                        onClick={() => navigate("/booking-requests")}
+                    >
+                        Requests
+                    </Button>
                     <Button
                         variant="link"
                         className={`${linkClass("inbox")} cursor-pointer`}
@@ -45,7 +85,15 @@ export default function TopMenu({ activePage, favorites = [], searchTerm, setSea
                     >
                         Inbox
                     </Button>
-                    <Button variant="link" className={`${linkClass("notifications")} cursor-pointer`} onClick={handleNotification}>Notifications</Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass(
+                            "notifications"
+                        )} cursor-pointer`}
+                        onClick={handleNotification}
+                    >
+                        Notifications
+                    </Button>
                 </div>
 
                 {/* Mobile menu button */}
@@ -61,7 +109,34 @@ export default function TopMenu({ activePage, favorites = [], searchTerm, setSea
             {/* Mobile links */}
             {mobileMenuOpen && (
                 <div className="flex flex-row gap-2 md:hidden mt-2">
-                    <Button variant="link" className={`${linkClass("home")} cursor-pointer`} onClick={handleHome}>Home</Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("home")} cursor-pointer`}
+                        onClick={handleHome}
+                    >
+                        Home
+                    </Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("my-bookings")} cursor-pointer`}
+                        onClick={() => navigate("/my-bookings")}
+                    >
+                        My Bookings
+                    </Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("my-ratings")} cursor-pointer`}
+                        onClick={() => navigate("/my-ratings")}
+                    >
+                        Ratings
+                    </Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass("requests")} cursor-pointer`}
+                        onClick={() => navigate("/booking-requests")}
+                    >
+                        Requests
+                    </Button>
                     <Button
                         variant="link"
                         className={`${linkClass("inbox")} cursor-pointer`}
@@ -69,7 +144,15 @@ export default function TopMenu({ activePage, favorites = [], searchTerm, setSea
                     >
                         Inbox
                     </Button>
-                    <Button variant="link" className={`${linkClass("notifications")} cursor-pointer`} onClick={handleNotification}>Notifications</Button>
+                    <Button
+                        variant="link"
+                        className={`${linkClass(
+                            "notifications"
+                        )} cursor-pointer`}
+                        onClick={handleNotification}
+                    >
+                        Notifications
+                    </Button>
                 </div>
             )}
 
@@ -96,9 +179,16 @@ export default function TopMenu({ activePage, favorites = [], searchTerm, setSea
                     <DropdownMenuTrigger>
                         {user ? (
                             <Avatar className="cursor-pointer">
-                                <AvatarImage src={user.face_image_url} alt="Profile" />
+                                <AvatarImage
+                                    src={
+                                        user.profile_pic_url ||
+                                        user.face_image_url
+                                    }
+                                    alt="Profile"
+                                />
                                 <AvatarFallback className="cursor-pointer">
-                                    {user.first_name?.[0]}{user.last_name?.[0]}
+                                    {user.first_name?.[0]}
+                                    {user.last_name?.[0]}
                                 </AvatarFallback>
                             </Avatar>
                         ) : (
@@ -108,9 +198,24 @@ export default function TopMenu({ activePage, favorites = [], searchTerm, setSea
                         )}
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="cursor-pointer">Profile</DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer">Settings</DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer">Logout</DropdownMenuItem>
+                        <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={() => navigate("/profile")}
+                        >
+                            Profile
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="cursor-pointer">
+                            Settings
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={async () => {
+                                await logout();
+                                navigate("/");
+                            }}
+                        >
+                            Logout
+                        </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>

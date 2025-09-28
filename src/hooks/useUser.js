@@ -1,14 +1,11 @@
-import { useState, useEffect } from "react";
+import { useUserContext } from "../context/UserContext.jsx";
 
 export function useUser() {
-  const [user, setUser] = useState(null);
+    const { user } = useUserContext();
+    return user;
+}
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem("loggedInUser");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-  }, []);
-
-  return user;
+export function useUserLoading() {
+    const { loading } = useUserContext();
+    return loading;
 }

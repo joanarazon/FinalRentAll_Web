@@ -15,6 +15,7 @@ function ItemCard({
     location,
     date,
     price,
+    quantity,
     imageUrl,
     onHeartClick,
     isFavorited,
@@ -68,6 +69,12 @@ function ItemCard({
                         {price && (
                             <p className="text-[#FFAB00] font-bold text-xl">
                                 ₱{price}/day
+                            </p>
+                        )}
+                        {quantity != null && (
+                            <p className="text-xs text-gray-600 mr-2">
+                                {Number(quantity) || 1} unit
+                                {(Number(quantity) || 1) > 1 ? "s" : ""}
                             </p>
                         )}
                         <Button

@@ -2,10 +2,12 @@ import rentLogo from "../assets/rent.png";
 import { useState } from "react";
 import { Lock, Mail, Phone, Loader2 } from "lucide-react";
 import { supabase } from "../../supabaseClient";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useToastApi } from "../components/ui/toast";
 
 function Login() {
+    const MIN_NAV_DELAY = 300; // ms
+    const delay = (ms) => new Promise((res) => setTimeout(res, ms));
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loginMethod, setLoginMethod] = useState("password"); // password | email_otp | sms_otp
@@ -14,6 +16,44 @@ function Login() {
     const [smsPhone, setSmsPhone] = useState("");
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const location = useLocation();
+    const from = location.state?.from?.pathname;
+
+    const isAdminPath = (p = "") => {
+        if (!p) return false;
+        if (p.startsWith("/admin")) return true;
+        const adminSet = new Set([
+            "/adminhome",
+            "/pending-users",
+            "/pending-items",
+            "/renting-history",
+        ]);
+        return adminSet.has(p);
+    };
+
+    const navigateAfterLogin = (role) => {
+        // If a previous route exists, prefer returning there, but keep role safety
+        if (from) {
+            const isAdminRoute = isAdminPath(from);
+            if (role === "admin") {
+                // Admins can return to admin routes; otherwise send to admin home
+                return navigate(isAdminRoute ? from : "/adminhome", {
+                    replace: true,
+                });
+            }
+            if (role === "user") {
+                // Users attempting to access admin should go to Home instead
+                if (isAdminRoute) return navigate("/home", { replace: true });
+                return navigate(from, { replace: true });
+            }
+            // Unknown role is unauthorized
+            return navigate("/not-authorized", { replace: true });
+        }
+        // Fallback by role
+        if (role === "admin") return navigate("/adminhome", { replace: true });
+        if (role === "user") return navigate("/home", { replace: true });
+        return navigate("/not-authorized", { replace: true });
+    };
     const toast = useToastApi();
 
     const handlePasswordLogin = async () => {
@@ -54,7 +94,8 @@ function Login() {
 
             if (profile.role === "unverified") {
                 toast.info("Your account is pending admin verification.");
-                return; // stop here, don't navigate
+                await delay(MIN_NAV_DELAY);
+                return navigate("/pending-verification", { replace: true });
             }
 
             // Store combined auth + profile in localStorage (omit sensitive fields; none here)
@@ -69,14 +110,8 @@ function Login() {
             const greetingName =
                 profile?.first_name || authUser.email || "there";
             toast.success(`Welcome back, ${greetingName}!`);
-            // Navigate based on role
-            if (profile.role === "admin") {
-                navigate("/adminhome");
-            } else if (profile.role === "user") {
-                navigate("/home");
-            } else {
-                toast.error("Unknown role — cannot log in.");
-            }
+            await delay(MIN_NAV_DELAY);
+            navigateAfterLogin(profile.role);
         } catch (err) {
             console.error("Login error:", err.message);
             toast.error("Login failed: " + err.message);
@@ -150,7 +185,8 @@ function Login() {
 
             if (profile.role === "unverified") {
                 toast.info("Your account is pending admin verification.");
-                return; // stop here, don't navigate
+                await delay(MIN_NAV_DELAY);
+                return navigate("/pending-verification", { replace: true });
             }
 
             const userInfo = {
@@ -161,13 +197,8 @@ function Login() {
             localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
 
             toast.success("Signed in successfully with email OTP");
-            if (profile.role === "admin") {
-                navigate("/adminhome");
-            } else if (profile.role === "user") {
-                navigate("/home");
-            } else {
-                toast.error("Unknown role — cannot log in.");
-            }
+            await delay(MIN_NAV_DELAY);
+            navigateAfterLogin(profile.role);
         } catch (err) {
             console.error("OTP verify error:", err.message);
             toast.error("Failed to verify OTP: " + err.message);
