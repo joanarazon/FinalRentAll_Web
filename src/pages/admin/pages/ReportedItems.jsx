@@ -47,7 +47,7 @@ export default function ReportedItems() {
         } finally {
             setLoading(false);
         }
-    }, [statusFilter, toast]);
+    }, [statusFilter]);
 
     useEffect(() => {
         fetchData();
@@ -129,11 +129,15 @@ export default function ReportedItems() {
                             </thead>
                             <tbody>
                                 {rows.map((r) => (
-                                    <tr key={r.complaint_id} className="border-b">
+                                    <tr
+                                        key={r.complaint_id}
+                                        className="border-b"
+                                    >
                                         <td className="p-2 text-sm">
                                             {r.item ? (
                                                 <span>
-                                                    {r.item.title} ({r.target_item_id})
+                                                    {r.item.title} (
+                                                    {r.target_item_id})
                                                 </span>
                                             ) : (
                                                 r.target_item_id
@@ -142,17 +146,26 @@ export default function ReportedItems() {
                                         <td className="p-2 text-sm">
                                             {r.sender ? (
                                                 <span>
-                                                    {r.sender.first_name} {r.sender.last_name}
+                                                    {r.sender.first_name}{" "}
+                                                    {r.sender.last_name}
                                                 </span>
                                             ) : (
                                                 r.sender_id
                                             )}
                                         </td>
-                                        <td className="p-2 text-sm capitalize">{r.reason}</td>
-                                        <td className="p-2 text-sm">
-                                            {r.sent_at ? new Date(r.sent_at).toLocaleString() : "—"}
+                                        <td className="p-2 text-sm capitalize">
+                                            {r.reason}
                                         </td>
-                                        <td className="p-2 text-sm capitalize">{r.status}</td>
+                                        <td className="p-2 text-sm">
+                                            {r.sent_at
+                                                ? new Date(
+                                                      r.sent_at
+                                                  ).toLocaleString()
+                                                : "—"}
+                                        </td>
+                                        <td className="p-2 text-sm capitalize">
+                                            {r.status}
+                                        </td>
                                         <td className="p-2">
                                             <div className="flex items-center gap-2">
                                                 <ReportDetailsDialog row={r} />
@@ -160,10 +173,18 @@ export default function ReportedItems() {
                                                     <Button
                                                         size="sm"
                                                         className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
-                                                        disabled={resolvingId === r.complaint_id}
-                                                        onClick={() => markResolved(r.complaint_id)}
+                                                        disabled={
+                                                            resolvingId ===
+                                                            r.complaint_id
+                                                        }
+                                                        onClick={() =>
+                                                            markResolved(
+                                                                r.complaint_id
+                                                            )
+                                                        }
                                                     >
-                                                        {resolvingId === r.complaint_id ? (
+                                                        {resolvingId ===
+                                                        r.complaint_id ? (
                                                             <Loader2 className="w-4 h-4 animate-spin" />
                                                         ) : (
                                                             "Mark Resolved"
@@ -199,14 +220,18 @@ function ReportDetailsDialog({ row }) {
                     <div className="flex justify-between">
                         <span>Item</span>
                         <span>
-                            {row.item ? `${row.item.title} (${row.target_item_id})` : row.target_item_id}
+                            {row.item
+                                ? `${row.item.title} (${row.target_item_id})`
+                                : row.target_item_id}
                         </span>
                     </div>
                     <div className="flex justify-between">
                         <span>Reported By</span>
                         <span>
                             {row.sender
-                                ? `${row.sender.first_name || ""} ${row.sender.last_name || ""}`
+                                ? `${row.sender.first_name || ""} ${
+                                      row.sender.last_name || ""
+                                  }`
                                 : row.sender_id}
                         </span>
                     </div>
@@ -215,13 +240,21 @@ function ReportDetailsDialog({ row }) {
                         <span className="capitalize">{row.reason}</span>
                     </div>
                     <div>
-                        <span className="block text-gray-600 mb-1">Content</span>
-                        <p className="whitespace-pre-line">{row.content || "—"}</p>
+                        <span className="block text-gray-600 mb-1">
+                            Content
+                        </span>
+                        <p className="whitespace-pre-line">
+                            {row.content || "—"}
+                        </p>
                     </div>
                     <Separator />
                     <div className="flex justify-between">
                         <span>Sent</span>
-                        <span>{row.sent_at ? new Date(row.sent_at).toLocaleString() : "—"}</span>
+                        <span>
+                            {row.sent_at
+                                ? new Date(row.sent_at).toLocaleString()
+                                : "—"}
+                        </span>
                     </div>
                     <div className="flex justify-between">
                         <span>Status</span>
