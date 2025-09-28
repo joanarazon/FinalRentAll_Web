@@ -16,6 +16,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { getExistingLessorReview, saveLessorReview } from "@/lib/reviews";
+import ReportDialog from "@/components/ReportDialog";
 
 export default function MyBookings() {
     const user = useUser();
@@ -195,7 +196,7 @@ function Section({ title, data, onChanged }) {
                                         ₱{Number(r.total_cost || 0).toFixed(2)}
                                     </span>
                                 </div>
-                                <div className="pt-2 flex gap-2">
+                                <div className="pt-2 flex gap-2 flex-wrap">
                                     <DetailsModal rental={r} />
                                     {title === "Ongoing" &&
                                         isEligibleReturn(r) && (
@@ -207,6 +208,22 @@ function Section({ title, data, onChanged }) {
                                     {title === "Completed" && (
                                         <RateLessorButton rental={r} />
                                     )}
+                                    <ReportDialog
+                                        trigger={
+                                            <Button
+                                                variant="destructive"
+                                                className="cursor-pointer"
+                                                size="sm"
+                                            >
+                                                Report Owner
+                                            </Button>
+                                        }
+                                        senderId={r?.renter?.id || user?.id}
+                                        targetUserId={r?.items?.user_id}
+                                        rentalId={r.rental_id}
+                                        title="Report Owner"
+                                        description="Describe your issue with the owner for this booking."
+                                    />
                                 </div>
                             </CardContent>
                         </Card>

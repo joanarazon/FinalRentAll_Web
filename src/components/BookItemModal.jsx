@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "../../supabaseClient";
 import { getLessorRatingStats } from "@/lib/reviews";
+import ReportDialog from "@/components/ReportDialog";
 
 export default function BookItemModal({
     open,
@@ -703,9 +704,43 @@ export default function BookItemModal({
                                             </div>
                                         )}
                                     </div>
-                                    <div className="mt-3 flex justify-end">
+                                    <div className="mt-3 flex flex-wrap justify-end gap-2 w-full">
+                                        <ReportDialog
+                                            trigger={
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    className="cursor-pointer"
+                                                    title="Report this owner"
+                                                >
+                                                    Report Owner
+                                                </Button>
+                                            }
+                                            senderId={currentUserId}
+                                            targetUserId={owner.id}
+                                            rentalId={null}
+                                            title="Report Owner"
+                                            description="Tell us what's wrong with the owner. We'll review ASAP."
+                                        />
+                                        <ReportDialog
+                                            trigger={
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="cursor-pointer"
+                                                >
+                                                    Report Item
+                                                </Button>
+                                            }
+                                            senderId={currentUserId}
+                                            targetItemId={item.item_id}
+                                            rentalId={null}
+                                            title="Report Item"
+                                            description="Describe the issue with this listing."
+                                        />
                                         <Button
                                             variant="outline"
+                                            size="sm"
                                             className="cursor-pointer"
                                             onClick={() => {
                                                 if (!currentUserId) {
