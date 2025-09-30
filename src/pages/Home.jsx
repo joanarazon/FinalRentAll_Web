@@ -106,9 +106,48 @@ function Home() {
             }
             if (error) throw error;
 
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const y = today.getFullYear();
+            const m = String(today.getMonth() + 1).padStart(2, "0");
+            const d = String(today.getDate()).padStart(2, "0");
+            const todayStr = `${y}-${m}-${d}`;
+
             const withImages = await Promise.all(
                 (data || []).map(async (it) => {
-                    const imageUrl = await getImageUrl(it.user_id, it.item_id);
+                    // Fetch image and today's overlapping bookings in parallel
+                    const imagePromise = getImageUrl(it.user_id, it.item_id);
+                    const overlapPromise = (async () => {
+                        try {
+                            const { count } = await supabase
+                                .from("rental_transactions")
+                                .select("*", { count: "exact", head: true })
+                                .eq("item_id", it.item_id)
+                                .in("status", [
+                                    "confirmed",
+                                    "ongoing",
+                                    "awaiting_owner_confirmation",
+                                ])
+                                .lte("start_date", todayStr)
+                                .gte("end_date", todayStr);
+                            return Number(count || 0);
+                        } catch (e) {
+                            console.warn(
+                                "overlap count failed for item",
+                                it.item_id,
+                                e?.message || e
+                            );
+                            return 0;
+                        }
+                    })();
+                    const [imageUrl, overlaps] = await Promise.all([
+                        imagePromise,
+                        overlapPromise,
+                    ]);
+
+                    const totalQty = Number(it.quantity) || 1;
+                    const remainingUnits = Math.max(0, totalQty - overlaps);
+
                     return {
                         ownerId: it.user_id,
                         title: it.title,
@@ -116,7 +155,7 @@ function Home() {
                         location: it.location || "",
                         date: new Date(it.created_at).toLocaleDateString(),
                         price: String(it.price_per_day),
-                        quantity: Number(it.quantity) || 1,
+                        quantity: remainingUnits,
                         imageUrl: imageUrl,
                         raw: it,
                     };
@@ -163,6 +202,24 @@ function Home() {
 
         return () => {
             supabase.removeChannel(channel);
+        };
+    }, [fetchItems]);
+
+    useEffect(() => {
+        // Refresh items when rentals change, so Home availability stays up-to-date
+        const rentalsChannel = supabase
+            .channel("rentals_changes")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "rental_transactions" },
+                () => {
+                    fetchItems();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(rentalsChannel);
         };
     }, [fetchItems]);
 

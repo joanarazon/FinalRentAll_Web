@@ -15,6 +15,8 @@ import AdminHome from "./pages/admin/AdminHome";
 import PendingUser from "./pages/admin/pages/PendingUser";
 import PendingItems from "./pages/admin/pages/PendingItems";
 import ViewRentingHistory from "./pages/admin/pages/ViewRentingHistory";
+import ReportedUsers from "./pages/admin/pages/ReportedUsers";
+import ReportedItems from "./pages/admin/pages/ReportedItems";
 // PendingBookings view intentionally hidden from admin routing
 // import PendingBookings from "./pages/admin/pages/PendingBookings";
 import OwnerBookingRequests from "./pages/OwnerBookingRequests";
@@ -102,6 +104,14 @@ export default class App extends Component {
                         <Route
                             path="/renting-history"
                             element={<ViewRentingHistory />}
+                        />
+                        <Route
+                            path="/reported-users"
+                            element={<ReportedUsers />}
+                        />
+                        <Route
+                            path="/reported-items"
+                            element={<ReportedItems />}
                         />
                     </Route>
                     {/** Pending Bookings route hidden per product change (handled by lessors) **/}

@@ -15,6 +15,8 @@ import {
     DialogTrigger,
     DialogFooter,
 } from "@/components/ui/dialog";
+import { getExistingLessorReview, saveLessorReview } from "@/lib/reviews";
+import ReportDialog from "@/components/ReportDialog";
 
 export default function MyBookings() {
     const user = useUser();
@@ -194,7 +196,7 @@ function Section({ title, data, onChanged }) {
                                         ₱{Number(r.total_cost || 0).toFixed(2)}
                                     </span>
                                 </div>
-                                <div className="pt-2 flex gap-2">
+                                <div className="pt-2 flex gap-2 flex-wrap">
                                     <DetailsModal rental={r} />
                                     {title === "Ongoing" &&
                                         isEligibleReturn(r) && (
@@ -203,6 +205,25 @@ function Section({ title, data, onChanged }) {
                                                 onChanged={onChanged}
                                             />
                                         )}
+                                    {title === "Completed" && (
+                                        <RateLessorButton rental={r} />
+                                    )}
+                                    <ReportDialog
+                                        trigger={
+                                            <Button
+                                                variant="destructive"
+                                                className="cursor-pointer"
+                                                size="sm"
+                                            >
+                                                Report Owner
+                                            </Button>
+                                        }
+                                        senderId={r?.renter?.id || user?.id}
+                                        targetUserId={r?.items?.user_id}
+                                        rentalId={r.rental_id}
+                                        title="Report Owner"
+                                        description="Describe your issue with the owner for this booking."
+                                    />
                                 </div>
                             </CardContent>
                         </Card>
@@ -262,6 +283,117 @@ function MarkReturned({ rental, onChanged }) {
         >
             {submitting ? "Marking…" : "Mark as Returned"}
         </Button>
+    );
+}
+
+function RateLessorButton({ rental }) {
+    const user = useUser();
+    const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [existing, setExisting] = useState(null);
+    const [rating, setRating] = useState(0);
+    const [comment, setComment] = useState("");
+    const toast = useToastApi();
+
+    useEffect(() => {
+        if (!open) return;
+        (async () => {
+            try {
+                setLoading(true);
+                const data = await getExistingLessorReview(
+                    rental.rental_id,
+                    user?.id
+                );
+                setExisting(data);
+                setRating(Number(data?.rating || 0));
+                setComment(data?.comment || "");
+            } catch (e) {
+                // ignore
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, [open, rental?.rental_id, user?.id]);
+
+    const submit = async (e) => {
+        e?.preventDefault?.();
+        if (!user?.id) return;
+        if (!rating) return;
+        try {
+            setLoading(true);
+            const { updated } = await saveLessorReview({
+                rentalId: rental.rental_id,
+                reviewerId: user.id,
+                rating,
+                comment,
+            });
+            toast.success(updated ? "Review updated" : "Review submitted");
+            setOpen(false);
+        } catch (err) {
+            toast.error(err.message || "Could not save review");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="cursor-pointer">
+                    {existing ? "Edit review" : "Rate lessor"}
+                </Button>
+            </DialogTrigger>
+            <DialogContent title="Rate lessor">
+                <DialogHeader>
+                    <DialogTitle>Rate lessor</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={submit} className="space-y-3">
+                    <div className="flex items-center gap-2">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                            <button
+                                type="button"
+                                key={n}
+                                onClick={() => setRating(n)}
+                                className={
+                                    `w-8 h-8 rounded-full border flex items-center justify-center ` +
+                                    (n <= rating
+                                        ? "bg-yellow-400 border-yellow-500"
+                                        : "bg-white border-gray-300")
+                                }
+                                aria-label={`${n} star`}
+                            >
+                                {n}
+                            </button>
+                        ))}
+                    </div>
+                    <textarea
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                        placeholder="Optional comment"
+                        className="w-full border rounded p-2 text-sm"
+                        rows={3}
+                    />
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="cursor-pointer"
+                            onClick={() => setOpen(false)}
+                            disabled={loading}
+                        >
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={loading || !rating}>
+                            {loading
+                                ? "Saving..."
+                                : existing
+                                ? "Update"
+                                : "Submit"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
 
