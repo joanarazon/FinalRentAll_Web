@@ -27,6 +27,7 @@ import Profile from "./pages/Profile";
 import { useUserContext } from "./context/UserContext.jsx";
 import Loading from "./components/Loading.jsx";
 import PendingVerification from "./pages/PendingVerification.jsx";
+import Chat from "./components/Chat.jsx";
 
 function RoleAwareLanding() {
     const { user, loading } = useUserContext();
@@ -66,6 +67,7 @@ export default class App extends Component {
                     >
                         <Route path="/home" element={<Home />} />
                         <Route path="/inbox" element={<Inbox />} />
+                        <Route path="/chat" element={<Chat />} />
                         <Route
                             path="/notifications"
                             element={<Notification />}
