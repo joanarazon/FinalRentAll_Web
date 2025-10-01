@@ -294,26 +294,6 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
             conv.preview.toLowerCase().includes(inboxSearch.toLowerCase())
     );
 
-    if (!currentUser) {
-        return (
-            <div className="bg-[#FFFBF2] min-h-screen flex flex-col">
-                <TopMenu
-                    activePage="inbox"
-                    favorites={favorites}
-                    searchTerm={searchTerm}
-                    setSearchTerm={setSearchTerm}
-                />
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center">
-                        <p className="text-lg text-gray-600">
-                            Please log in to view messages
-                        </p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className="bg-[#FFFBF2] min-h-screen flex flex-col">
             <TopMenu

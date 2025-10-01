@@ -33,7 +33,7 @@ import Chat from "./components/Chat.jsx";
 
 function RoleAwareLanding() {
     const { user, loading } = useUserContext();
-    if (loading) return <Loading />;
+    if (loading) return <Loading />;    
     const role = user?.role;
     if (!user) return <Login />;
     if (typeof role === "undefined") return <Loading />;

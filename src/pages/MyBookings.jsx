@@ -81,9 +81,9 @@ export default function MyBookings() {
             />
             <div className="max-w-5xl mx-auto p-4 space-y-6">
                 <h2 className="text-2xl font-semibold">My Bookings</h2>
-                {loading ? (
+                {/* {loading ? (
                     <Loading />
-                ) : (
+                ) : ( */}
                     <div className="space-y-6">
                         <Section
                             title="Pending"
@@ -131,7 +131,7 @@ export default function MyBookings() {
                             user={user}
                         />
                     </div>
-                )}
+                    {/* )} */}
             </div>
         </div>
     );
