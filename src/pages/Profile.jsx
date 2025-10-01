@@ -4,6 +4,7 @@ import { supabase } from "../../supabaseClient";
 import { useToastApi } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
     Camera,
     EllipsisVertical,
@@ -17,6 +18,8 @@ import TopMenu from "@/components/topMenu";
 import { ChevronLeft } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getLessorRatingStats } from "@/lib/reviews";
+import BookItemModal from "@/components/BookItemModal";
+import ReportDialog from "@/components/ReportDialog";
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -36,10 +39,14 @@ export default function Profile() {
     const isOwnProfile = authUser?.id && profileUserId === authUser.id;
 
     const [profile, setProfile] = useState(null);
+    const [loadingProfile, setLoadingProfile] = useState(true);
     const [items, setItems] = useState([]);
     const [loadingItems, setLoadingItems] = useState(false);
     const [rating, setRating] = useState({ average: 0, count: 0 });
+    const [loadingRating, setLoadingRating] = useState(true);
     const [uploading, setUploading] = useState(false);
+    const [rentOpen, setRentOpen] = useState(false);
+    const [selectedItem, setSelectedItem] = useState(null);
 
     const initials = useMemo(() => {
         const f = (profile?.first_name || "").trim();
@@ -86,6 +93,7 @@ export default function Profile() {
     const loadProfile = useCallback(async () => {
         if (!profileUserId) return;
         try {
+            setLoadingProfile(true);
             const { data, error } = await supabase
                 .from("users")
                 .select(
@@ -97,6 +105,8 @@ export default function Profile() {
             setProfile(data);
         } catch (e) {
             toast.error("Failed to load profile");
+        } finally {
+            setLoadingProfile(false);
         }
     }, [profileUserId]);
 
@@ -172,13 +182,22 @@ export default function Profile() {
         loadItems();
         (async () => {
             try {
+                setLoadingRating(true);
                 const stats = await getLessorRatingStats(profileUserId);
                 setRating(stats);
             } catch {
                 setRating({ average: 0, count: 0 });
+            } finally {
+                setLoadingRating(false);
             }
         })();
     }, [profileUserId, loadProfile, loadItems]);
+
+    const onRent = useCallback((item) => {
+        if (!item) return;
+        setSelectedItem(item);
+        setRentOpen(true);
+    }, []);
 
     return (
         <div className="min-h-screen bg-[#FFFBF2]">
@@ -205,14 +224,18 @@ export default function Profile() {
                 <h1 className="text-2xl font-semibold mb-4">Profile</h1>
                 <div className="flex items-center gap-4 mb-6">
                     <div className="relative h-16 w-16">
-                        <Avatar className="h-16 w-16">
-                            <AvatarImage
-                                src={profile?.profile_pic_url || ""}
-                                alt="Profile"
-                            />
-                            <AvatarFallback>{initials}</AvatarFallback>
-                        </Avatar>
-                        {isOwnProfile && (
+                        {loadingProfile ? (
+                            <Skeleton className="h-16 w-16 rounded-full" />
+                        ) : (
+                            <Avatar className="h-16 w-16">
+                                <AvatarImage
+                                    src={profile?.profile_pic_url || ""}
+                                    alt="Profile"
+                                />
+                                <AvatarFallback>{initials}</AvatarFallback>
+                            </Avatar>
+                        )}
+                        {isOwnProfile && !loadingProfile && (
                             <>
                                 <input
                                     id="face-upload-input"
@@ -242,60 +265,124 @@ export default function Profile() {
                         )}
                     </div>
                     <div>
-                        <p className="text-lg font-medium">
-                            {(profile?.first_name || "").trim()}{" "}
-                            {(profile?.last_name || "").trim()}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                            Member since{" "}
-                            {profile?.created_at
-                                ? new Date(
-                                      profile.created_at
-                                  ).toLocaleDateString()
-                                : "—"}
-                        </p>
-                        {profile?.phone && (
-                            <p className="text-sm text-gray-600">
-                                📞 {profile.phone}
-                            </p>
-                        )}
-                        <p className="text-sm text-gray-700 mt-1">
-                            Owner rating:{" "}
-                            {rating.count > 0
-                                ? `${rating.average.toFixed(1)} / 5 (${
-                                      rating.count
-                                  } review${rating.count === 1 ? "" : "s"})`
-                                : "No reviews yet"}
-                        </p>
-                        {!isOwnProfile && profile?.id && (
-                            <div className="mt-3">
-                                <Button
-                                    variant="outline"
-                                    className="cursor-pointer"
-                                    onClick={() =>
-                                        navigate(`/inbox?to=${profile.id}`)
-                                    }
-                                >
-                                    Message Owner
-                                </Button>
-                            </div>
+                        {loadingProfile ? (
+                            <>
+                                <Skeleton className="h-5 w-48 mb-2" />
+                                <Skeleton className="h-4 w-40 mb-1" />
+                                <Skeleton className="h-4 w-28" />
+                                <Skeleton className="h-4 w-56 mt-2" />
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-lg font-medium">
+                                    {(profile?.first_name || "").trim()}{" "}
+                                    {(profile?.last_name || "").trim()}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                    Member since{" "}
+                                    {profile?.created_at
+                                        ? new Date(
+                                              profile.created_at
+                                          ).toLocaleDateString()
+                                        : "—"}
+                                </p>
+                                {profile?.phone && (
+                                    <p className="text-sm text-gray-600">
+                                        📞 {profile.phone}
+                                    </p>
+                                )}
+                                <p className="text-sm text-gray-700 mt-1">
+                                    Owner rating:{" "}
+                                    {loadingRating ? (
+                                        <Skeleton className="h-4 w-40 inline-block align-middle" />
+                                    ) : rating.count > 0 ? (
+                                        `${rating.average.toFixed(1)} / 5 (${
+                                            rating.count
+                                        } review${
+                                            rating.count === 1 ? "" : "s"
+                                        })`
+                                    ) : (
+                                        "No reviews yet"
+                                    )}
+                                </p>
+                                {!isOwnProfile && profile?.id && (
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        <Button
+                                            variant="outline"
+                                            className="cursor-pointer"
+                                            onClick={() =>
+                                                navigate(
+                                                    `/inbox?to=${profile.id}`
+                                                )
+                                            }
+                                        >
+                                            Message Owner
+                                        </Button>
+                                        <ReportDialog
+                                            trigger={
+                                                <Button
+                                                    variant="outline"
+                                                    className="cursor-pointer"
+                                                >
+                                                    Report User
+                                                </Button>
+                                            }
+                                            senderId={authUser?.id || null}
+                                            targetUserId={profile.id}
+                                            targetItemId={null}
+                                            rentalId={null}
+                                            title="Report User"
+                                            description="Describe the issue with this user."
+                                        />
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
                 <h2 className="text-xl font-semibold mt-6 mb-3">
                     Open for booking
                 </h2>
-                <OwnedItemsGrid
-                    items={items}
-                    isOwner={isOwnProfile}
-                    onChanged={loadItems}
+                {loadingItems ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <div
+                                key={i}
+                                className="border rounded-lg overflow-hidden bg-white"
+                            >
+                                <Skeleton className="w-full h-40" />
+                                <div className="p-3">
+                                    <Skeleton className="h-5 w-3/4 mb-2" />
+                                    <Skeleton className="h-4 w-1/3" />
+                                    <div className="mt-3 flex justify-between items-center">
+                                        <Skeleton className="h-4 w-20" />
+                                        <Skeleton className="h-8 w-24" />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <OwnedItemsGrid
+                        items={items}
+                        isOwner={isOwnProfile}
+                        onChanged={loadItems}
+                        onRent={onRent}
+                    />
+                )}
+                <BookItemModal
+                    open={rentOpen}
+                    onOpenChange={setRentOpen}
+                    item={selectedItem}
+                    currentUserId={authUser?.id || null}
+                    onBooked={loadItems}
                 />
             </div>
         </div>
     );
 }
 
-function OwnedItemsGrid({ items, isOwner, onChanged }) {
+function OwnedItemsGrid({ items, isOwner, onChanged, onRent }) {
     if (!items || items.length === 0) {
         return <p className="text-sm text-gray-600">No active posts.</p>;
     }
@@ -339,6 +426,17 @@ function OwnedItemsGrid({ items, isOwner, onChanged }) {
                                 </span>
                             )}
                         </div>
+                        {!isOwner && (
+                            <div className="mt-3 flex justify-end">
+                                <Button
+                                    size="sm"
+                                    className="cursor-pointer"
+                                    onClick={() => onRent?.(it)}
+                                >
+                                    Rent Now
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </div>
             ))}

@@ -5,7 +5,6 @@ import MailSidebar from "../components/MailSidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "../../supabaseClient";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useUserContext } from "../context/UserContext";
 
 function Inbox({ favorites, searchTerm, setSearchTerm }) {
     const [inboxSearch, setInboxSearch] = useState("");
@@ -13,12 +12,10 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
     const location = useLocation();
     const navigate = useNavigate();
 
-    // Use UserContext instead of local state
-    const { user: currentUser, loading: userLoading } = useUserContext();
-
     // State from mobile version
     const [conversations, setConversations] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [currentUser, setCurrentUser] = useState(null);
 
     const params = useMemo(
         () => new URLSearchParams(location.search),
@@ -27,13 +24,29 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
     const toId = params.get("to");
     const itemId = params.get("item");
 
-    // Fetch conversations - depends on currentUser from context
+    // Get current user - same as mobile
+    useEffect(() => {
+        const getCurrentUser = async () => {
+            try {
+                const {
+                    data: { user },
+                    error,
+                } = await supabase.auth.getUser();
+                if (error) {
+                    console.error("Error getting user:", error);
+                    return;
+                }
+                setCurrentUser(user);
+            } catch (error) {
+                console.error("Error in getCurrentUser:", error);
+            }
+        };
+        getCurrentUser();
+    }, []);
+
+    // Fetch conversations - same logic as mobile
     const fetchConversations = useCallback(async () => {
-        if (!currentUser) {
-            setConversations([]);
-            setLoading(false);
-            return;
-        }
+        if (!currentUser) return;
 
         try {
             console.log("Fetching conversations for user:", currentUser.id);
@@ -58,7 +71,6 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
 
             if (convError) {
                 console.error("Error fetching conversations:", convError);
-                setLoading(false);
                 return;
             }
 
@@ -70,20 +82,25 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                 return;
             }
 
-            // ... rest of your fetchConversations logic remains the same
+            // Get user IDs to fetch user details
             const otherUserIds = convData.map((conv) =>
                 conv.user1_id === currentUser.id ? conv.user2_id : conv.user1_id
             );
 
+            // Get item IDs to fetch item details
             const itemIds = convData
                 .map((conv) => conv.item_id)
                 .filter(Boolean);
+
+            // Get conversation IDs to fetch last message details
             const conversationIds = convData.map((conv) => conv.id);
 
             // Fetch user details
             const { data: usersData, error: usersError } = await supabase
                 .from("users")
-                .select("id, first_name, last_name, face_image_url")
+                .select(
+                    "id, first_name, last_name, profile_pic_url, face_image_url"
+                )
                 .in("id", otherUserIds);
 
             if (usersError) {
@@ -105,7 +122,7 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                 }
             }
 
-            // Fetch last message details
+            // Fetch last message details to get message type
             const { data: lastMessagesData, error: lastMessagesError } =
                 await supabase
                     .from("messages")
@@ -122,6 +139,7 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                 );
             }
 
+            // Group messages by conversation and get the latest one for each
             const lastMessagesByConv = {};
             if (lastMessagesData) {
                 lastMessagesData.forEach((msg) => {
@@ -131,6 +149,7 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                 });
             }
 
+            // Combine conversation data with user and item details
             const enrichedConversations = convData.map((conv) => {
                 const otherUserId =
                     conv.user1_id === currentUser.id
@@ -144,6 +163,7 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                 );
                 const lastMessage = lastMessagesByConv[conv.id];
 
+                // Determine preview text based on message type
                 let preview = "No messages yet";
                 if (lastMessage) {
                     if (lastMessage.message_type === "image") {
@@ -158,6 +178,7 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                     preview = conv.last_message;
                 }
 
+                // Format time - same as mobile
                 const formatMessageTime = (timestamp) => {
                     if (!timestamp) return "";
                     const messageTime = new Date(timestamp);
@@ -186,7 +207,10 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                     otherUserName: otherUser
                         ? `${otherUser.first_name} ${otherUser.last_name}`
                         : "Unknown User",
-                    otherUserImage: otherUser?.face_image_url || null,
+                    otherUserImage:
+                        otherUser?.profile_pic_url ||
+                        otherUser?.face_image_url ||
+                        null,
                     itemTitle: item?.title || "Item not found",
                     formattedTime: formatMessageTime(conv.last_message_at),
                     preview,
@@ -207,14 +231,14 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
 
     // Load conversations when user is available
     useEffect(() => {
-        if (!userLoading) {
+        if (currentUser) {
             fetchConversations();
         }
-    }, [currentUser, userLoading, fetchConversations]);
+    }, [currentUser, fetchConversations]);
 
     // Real-time updates for conversations
     useEffect(() => {
-        if (!currentUser || userLoading) return;
+        if (!currentUser) return;
 
         console.log("Setting up real-time subscription for conversations");
 
@@ -251,7 +275,7 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
             console.log("Cleaning up real-time subscription");
             supabase.removeChannel(channel);
         };
-    }, [currentUser, userLoading, fetchConversations]);
+    }, [currentUser, fetchConversations]);
 
     // Navigate to chat - web version
     const openChat = (conversation) => {
@@ -270,26 +294,6 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
             conv.preview.toLowerCase().includes(inboxSearch.toLowerCase())
     );
 
-    // Show loading state while UserContext is loading
-    if (userLoading) {
-        return (
-            <div className="bg-[#FFFBF2] min-h-screen flex flex-col">
-                <TopMenu
-                    activePage="inbox"
-                    favorites={favorites}
-                    searchTerm={searchTerm}
-                    setSearchTerm={setSearchTerm}
-                />
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center">
-                        <p className="text-lg text-gray-600">Loading...</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // Show login prompt if no user
     if (!currentUser) {
         return (
             <div className="bg-[#FFFBF2] min-h-screen flex flex-col">
