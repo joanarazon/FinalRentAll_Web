@@ -81,6 +81,7 @@ export default class App extends Component {
                         <Route path="/my-bookings" element={<MyBookings />} />
                         <Route path="/my-ratings" element={<MyRatings />} />
                         <Route path="/profile" element={<Profile />} />
+                        <Route path="/profile/:id" element={<Profile />} />
                     </Route>
                     {/* Admin group */}
                     <Route

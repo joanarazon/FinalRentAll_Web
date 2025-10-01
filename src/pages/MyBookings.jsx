@@ -85,11 +85,16 @@ export default function MyBookings() {
                     <Loading />
                 ) : (
                     <div className="space-y-6">
-                        <Section title="Pending" data={grouped.pending} />
+                        <Section
+                            title="Pending"
+                            data={grouped.pending}
+                            user={user}
+                        />
                         <Separator />
                         <Section
                             title="Ongoing"
                             data={grouped.ongoing}
+                            user={user}
                             onChanged={() => {
                                 // refetch to reflect updates
                                 (async () => {
@@ -120,7 +125,11 @@ export default function MyBookings() {
                             }}
                         />
                         <Separator />
-                        <Section title="Completed" data={grouped.completed} />
+                        <Section
+                            title="Completed"
+                            data={grouped.completed}
+                            user={user}
+                        />
                     </div>
                 )}
             </div>
@@ -128,7 +137,7 @@ export default function MyBookings() {
     );
 }
 
-function Section({ title, data, onChanged }) {
+function Section({ title, data, onChanged, user }) {
     return (
         <div>
             <h3 className="text-xl font-medium mb-3">{title}</h3>

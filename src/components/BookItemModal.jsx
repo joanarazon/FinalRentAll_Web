@@ -708,23 +708,6 @@ export default function BookItemModal({
                                         <ReportDialog
                                             trigger={
                                                 <Button
-                                                    variant="destructive"
-                                                    size="sm"
-                                                    className="cursor-pointer"
-                                                    title="Report this owner"
-                                                >
-                                                    Report Owner
-                                                </Button>
-                                            }
-                                            senderId={currentUserId}
-                                            targetUserId={owner.id}
-                                            rentalId={null}
-                                            title="Report Owner"
-                                            description="Tell us what's wrong with the owner. We'll review ASAP."
-                                        />
-                                        <ReportDialog
-                                            trigger={
-                                                <Button
                                                     variant="outline"
                                                     size="sm"
                                                     className="cursor-pointer"
@@ -743,23 +726,12 @@ export default function BookItemModal({
                                             size="sm"
                                             className="cursor-pointer"
                                             onClick={() => {
-                                                if (!currentUserId) {
-                                                    setErrorMsg(
-                                                        "Please sign in to message the owner."
-                                                    );
-                                                    return;
-                                                }
-                                                const params =
-                                                    new URLSearchParams({
-                                                        to: owner.id,
-                                                        item: item.item_id,
-                                                    });
                                                 navigate(
-                                                    `/inbox?${params.toString()}`
+                                                    `/profile/${owner.id}`
                                                 );
                                             }}
                                         >
-                                            Message Owner
+                                            View Owner Profile
                                         </Button>
                                     </div>
                                 </div>

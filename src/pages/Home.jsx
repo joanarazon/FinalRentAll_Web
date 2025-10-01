@@ -336,6 +336,20 @@ function Home() {
                                     setSelectedItem(item.raw || item); // prefer raw DB shape if available
                                     setBookOpen(true);
                                 }}
+                                onMessageOwner={
+                                    user?.id !== item.ownerId
+                                        ? () => {
+                                              const params =
+                                                  new URLSearchParams({
+                                                      to: item.ownerId,
+                                                      item:
+                                                          item.raw?.item_id ||
+                                                          item.item_id,
+                                                  });
+                                              window.location.href = `/inbox?${params.toString()}`;
+                                          }
+                                        : undefined
+                                }
                             />
                         );
                     })}

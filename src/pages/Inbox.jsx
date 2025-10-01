@@ -11,7 +11,7 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
-    
+
     // State from mobile version
     const [conversations, setConversations] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -28,14 +28,17 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
     useEffect(() => {
         const getCurrentUser = async () => {
             try {
-                const { data: { user }, error } = await supabase.auth.getUser();
+                const {
+                    data: { user },
+                    error,
+                } = await supabase.auth.getUser();
                 if (error) {
-                    console.error('Error getting user:', error);
+                    console.error("Error getting user:", error);
                     return;
                 }
                 setCurrentUser(user);
             } catch (error) {
-                console.error('Error in getCurrentUser:', error);
+                console.error("Error in getCurrentUser:", error);
             }
         };
         getCurrentUser();
@@ -46,11 +49,12 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
         if (!currentUser) return;
 
         try {
-            console.log('Fetching conversations for user:', currentUser.id);
+            console.log("Fetching conversations for user:", currentUser.id);
 
             const { data: convData, error: convError } = await supabase
-                .from('conversations')
-                .select(`
+                .from("conversations")
+                .select(
+                    `
                     id,
                     user1_id,
                     user2_id,
@@ -58,16 +62,19 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                     last_message,
                     last_message_at,
                     created_at
-                `)
-                .or(`user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id}`)
-                .order('last_message_at', { ascending: false });
+                `
+                )
+                .or(
+                    `user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id}`
+                )
+                .order("last_message_at", { ascending: false });
 
             if (convError) {
-                console.error('Error fetching conversations:', convError);
+                console.error("Error fetching conversations:", convError);
                 return;
             }
 
-            console.log('Conversations found:', convData?.length || 0);
+            console.log("Conversations found:", convData?.length || 0);
 
             if (!convData || convData.length === 0) {
                 setConversations([]);
@@ -76,56 +83,66 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
             }
 
             // Get user IDs to fetch user details
-            const otherUserIds = convData.map(conv =>
+            const otherUserIds = convData.map((conv) =>
                 conv.user1_id === currentUser.id ? conv.user2_id : conv.user1_id
             );
 
             // Get item IDs to fetch item details
-            const itemIds = convData.map(conv => conv.item_id).filter(Boolean);
+            const itemIds = convData
+                .map((conv) => conv.item_id)
+                .filter(Boolean);
 
             // Get conversation IDs to fetch last message details
-            const conversationIds = convData.map(conv => conv.id);
+            const conversationIds = convData.map((conv) => conv.id);
 
             // Fetch user details
             const { data: usersData, error: usersError } = await supabase
-                .from('users')
-                .select('id, first_name, last_name, face_image_url')
-                .in('id', otherUserIds);
+                .from("users")
+                .select(
+                    "id, first_name, last_name, profile_pic_url, face_image_url"
+                )
+                .in("id", otherUserIds);
 
             if (usersError) {
-                console.warn('Error fetching users:', usersError);
+                console.warn("Error fetching users:", usersError);
             }
 
             // Fetch item details
             let itemsData = [];
             if (itemIds.length > 0) {
                 const { data: items, error: itemsError } = await supabase
-                    .from('items')
-                    .select('item_id, title, user_id')
-                    .in('item_id', itemIds);
+                    .from("items")
+                    .select("item_id, title, user_id")
+                    .in("item_id", itemIds);
 
                 if (itemsError) {
-                    console.warn('Error fetching items:', itemsError);
+                    console.warn("Error fetching items:", itemsError);
                 } else {
                     itemsData = items || [];
                 }
             }
 
             // Fetch last message details to get message type
-            const { data: lastMessagesData, error: lastMessagesError } = await supabase
-                .from('messages')
-                .select('conversation_id, message_type, content, created_at')
-                .in('conversation_id', conversationIds)
-                .order('created_at', { ascending: false });
+            const { data: lastMessagesData, error: lastMessagesError } =
+                await supabase
+                    .from("messages")
+                    .select(
+                        "conversation_id, message_type, content, created_at"
+                    )
+                    .in("conversation_id", conversationIds)
+                    .order("created_at", { ascending: false });
 
             if (lastMessagesError) {
-                console.warn('Error fetching last messages:', lastMessagesError);
+                console.warn(
+                    "Error fetching last messages:",
+                    lastMessagesError
+                );
             }
 
             // Group messages by conversation and get the latest one for each
             const lastMessagesByConv = {};
             if (lastMessagesData) {
-                lastMessagesData.forEach(msg => {
+                lastMessagesData.forEach((msg) => {
                     if (!lastMessagesByConv[msg.conversation_id]) {
                         lastMessagesByConv[msg.conversation_id] = msg;
                     }
@@ -133,19 +150,29 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
             }
 
             // Combine conversation data with user and item details
-            const enrichedConversations = convData.map(conv => {
-                const otherUserId = conv.user1_id === currentUser.id ? conv.user2_id : conv.user1_id;
-                const otherUser = usersData?.find(user => user.id === otherUserId);
-                const item = itemsData.find(item => item.item_id === conv.item_id);
+            const enrichedConversations = convData.map((conv) => {
+                const otherUserId =
+                    conv.user1_id === currentUser.id
+                        ? conv.user2_id
+                        : conv.user1_id;
+                const otherUser = usersData?.find(
+                    (user) => user.id === otherUserId
+                );
+                const item = itemsData.find(
+                    (item) => item.item_id === conv.item_id
+                );
                 const lastMessage = lastMessagesByConv[conv.id];
 
                 // Determine preview text based on message type
-                let preview = 'No messages yet';
+                let preview = "No messages yet";
                 if (lastMessage) {
-                    if (lastMessage.message_type === 'image') {
-                        preview = '📷 Image';
+                    if (lastMessage.message_type === "image") {
+                        preview = "📷 Image";
                     } else {
-                        preview = conv.last_message || lastMessage.content || 'No messages yet';
+                        preview =
+                            conv.last_message ||
+                            lastMessage.content ||
+                            "No messages yet";
                     }
                 } else if (conv.last_message) {
                     preview = conv.last_message;
@@ -153,18 +180,22 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
 
                 // Format time - same as mobile
                 const formatMessageTime = (timestamp) => {
-                    if (!timestamp) return '';
+                    if (!timestamp) return "";
                     const messageTime = new Date(timestamp);
                     const now = new Date();
                     const diffInHours = (now - messageTime) / (1000 * 60 * 60);
 
                     if (diffInHours < 1) {
-                        const diffInMinutes = Math.floor((now - messageTime) / (1000 * 60));
-                        return diffInMinutes <= 1 ? 'Just now' : `${diffInMinutes}m ago`;
+                        const diffInMinutes = Math.floor(
+                            (now - messageTime) / (1000 * 60)
+                        );
+                        return diffInMinutes <= 1
+                            ? "Just now"
+                            : `${diffInMinutes}m ago`;
                     } else if (diffInHours < 24) {
                         return `${Math.floor(diffInHours)}h ago`;
                     } else if (diffInHours < 48) {
-                        return 'Yesterday';
+                        return "Yesterday";
                     } else {
                         return messageTime.toLocaleDateString();
                     }
@@ -173,20 +204,27 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                 return {
                     ...conv,
                     otherUserId,
-                    otherUserName: otherUser ? `${otherUser.first_name} ${otherUser.last_name}` : 'Unknown User',
-                    otherUserImage: otherUser?.face_image_url || null,
-                    itemTitle: item?.title || 'Item not found',
+                    otherUserName: otherUser
+                        ? `${otherUser.first_name} ${otherUser.last_name}`
+                        : "Unknown User",
+                    otherUserImage:
+                        otherUser?.profile_pic_url ||
+                        otherUser?.face_image_url ||
+                        null,
+                    itemTitle: item?.title || "Item not found",
                     formattedTime: formatMessageTime(conv.last_message_at),
-                    preview
+                    preview,
                 };
             });
 
-            console.log('Enriched conversations:', enrichedConversations.length);
+            console.log(
+                "Enriched conversations:",
+                enrichedConversations.length
+            );
             setConversations(enrichedConversations);
             setLoading(false);
-
         } catch (error) {
-            console.error('Error in fetchConversations:', error);
+            console.error("Error in fetchConversations:", error);
             setLoading(false);
         }
     }, [currentUser]);
@@ -202,53 +240,58 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
     useEffect(() => {
         if (!currentUser) return;
 
-        console.log('Setting up real-time subscription for conversations');
+        console.log("Setting up real-time subscription for conversations");
 
         const channel = supabase
-            .channel('inbox_changes')
+            .channel("inbox_changes")
             .on(
-                'postgres_changes',
+                "postgres_changes",
                 {
-                    event: '*',
-                    schema: 'public',
-                    table: 'conversations',
-                    filter: `or(user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id})`
+                    event: "*",
+                    schema: "public",
+                    table: "conversations",
+                    filter: `or(user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id})`,
                 },
                 (payload) => {
-                    console.log('Conversation change received:', payload);
+                    console.log("Conversation change received:", payload);
                     fetchConversations();
                 }
             )
             .on(
-                'postgres_changes',
+                "postgres_changes",
                 {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'messages'
+                    event: "INSERT",
+                    schema: "public",
+                    table: "messages",
                 },
                 (payload) => {
-                    console.log('New message received:', payload);
+                    console.log("New message received:", payload);
                     fetchConversations();
                 }
             )
             .subscribe();
 
         return () => {
-            console.log('Cleaning up real-time subscription');
+            console.log("Cleaning up real-time subscription");
             supabase.removeChannel(channel);
         };
     }, [currentUser, fetchConversations]);
 
     // Navigate to chat - web version
     const openChat = (conversation) => {
-        navigate(`/chat?conversationId=${conversation.id}&otherUserId=${conversation.otherUserId}&itemId=${conversation.item_id}`);
+        navigate(
+            `/chat?conversationId=${conversation.id}&otherUserId=${conversation.otherUserId}&itemId=${conversation.item_id}`
+        );
     };
 
     // Filter conversations based on search
-    const filteredConversations = conversations.filter(conv =>
-        conv.otherUserName.toLowerCase().includes(inboxSearch.toLowerCase()) ||
-        conv.itemTitle.toLowerCase().includes(inboxSearch.toLowerCase()) ||
-        conv.preview.toLowerCase().includes(inboxSearch.toLowerCase())
+    const filteredConversations = conversations.filter(
+        (conv) =>
+            conv.otherUserName
+                .toLowerCase()
+                .includes(inboxSearch.toLowerCase()) ||
+            conv.itemTitle.toLowerCase().includes(inboxSearch.toLowerCase()) ||
+            conv.preview.toLowerCase().includes(inboxSearch.toLowerCase())
     );
 
     if (!currentUser) {
@@ -262,7 +305,9 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                 />
                 <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
-                        <p className="text-lg text-gray-600">Please log in to view messages</p>
+                        <p className="text-lg text-gray-600">
+                            Please log in to view messages
+                        </p>
                     </div>
                 </div>
             </div>
@@ -323,9 +368,19 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                     <main className="flex-1 p-6">
                         {/* Header info */}
                         <div className="mb-6">
-                            <h1 className="text-2xl font-bold text-gray-800">Messages</h1>
+                            <h1 className="text-2xl font-bold text-gray-800">
+                                Messages
+                            </h1>
                             <p className="text-gray-600">
-                                {loading ? "Loading..." : `${filteredConversations.length} conversation${filteredConversations.length !== 1 ? 's' : ''}`}
+                                {loading
+                                    ? "Loading..."
+                                    : `${
+                                          filteredConversations.length
+                                      } conversation${
+                                          filteredConversations.length !== 1
+                                              ? "s"
+                                              : ""
+                                      }`}
                             </p>
                         </div>
 
@@ -333,7 +388,10 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                             // Loading skeletons
                             <div className="space-y-4">
                                 {[...Array(3)].map((_, index) => (
-                                    <div key={index} className="flex gap-4 p-4 bg-white rounded-lg shadow">
+                                    <div
+                                        key={index}
+                                        className="flex gap-4 p-4 bg-white rounded-lg shadow"
+                                    >
                                         <Skeleton className="w-16 h-16 rounded-full" />
                                         <div className="flex-1 space-y-2">
                                             <Skeleton className="h-5 w-32" />
@@ -352,9 +410,12 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                                         <span className="text-2xl">📨</span>
                                     </div>
                                 </div>
-                                <h3 className="text-xl font-bold text-gray-800 mb-2">No conversations yet</h3>
+                                <h3 className="text-xl font-bold text-gray-800 mb-2">
+                                    No conversations yet
+                                </h3>
                                 <p className="text-gray-600 max-w-md">
-                                    Start messaging item owners from the Home screen
+                                    Start messaging item owners from the Home
+                                    screen
                                 </p>
                             </div>
                         ) : (
@@ -370,22 +431,30 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                                             {conversation.otherUserImage ? (
                                                 <Avatar className="w-16 h-16">
                                                     <AvatarImage
-                                                        src={conversation.otherUserImage}
-                                                        alt={conversation.otherUserName}
+                                                        src={
+                                                            conversation.otherUserImage
+                                                        }
+                                                        alt={
+                                                            conversation.otherUserName
+                                                        }
                                                     />
                                                     <AvatarFallback>
-                                                        {conversation.otherUserName.charAt(0).toUpperCase()}
+                                                        {conversation.otherUserName
+                                                            .charAt(0)
+                                                            .toUpperCase()}
                                                     </AvatarFallback>
                                                 </Avatar>
                                             ) : (
                                                 <Avatar className="w-16 h-16 bg-orange-500">
                                                     <AvatarFallback className="text-white font-bold">
-                                                        {conversation.otherUserName.charAt(0).toUpperCase()}
+                                                        {conversation.otherUserName
+                                                            .charAt(0)
+                                                            .toUpperCase()}
                                                     </AvatarFallback>
                                                 </Avatar>
                                             )}
                                         </div>
-                                        
+
                                         <div className="flex-1 min-w-0">
                                             <div className="flex justify-between items-start mb-1">
                                                 <h3 className="font-semibold text-gray-800 truncate">
@@ -395,11 +464,11 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                                                     {conversation.formattedTime}
                                                 </span>
                                             </div>
-                                            
+
                                             <p className="text-sm text-orange-500 font-medium mb-1 truncate">
                                                 📦 {conversation.itemTitle}
                                             </p>
-                                            
+
                                             <p className="text-gray-600 text-sm line-clamp-2">
                                                 {conversation.preview}
                                             </p>
