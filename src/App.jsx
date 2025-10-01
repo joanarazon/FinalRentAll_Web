@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { Component, useEffect } from "react";
 import {
     BrowserRouter as Router,
     Routes,
@@ -31,9 +31,11 @@ import Loading from "./components/Loading.jsx";
 import PendingVerification from "./pages/PendingVerification.jsx";
 import Chat from "./components/Chat.jsx";
 
+import { generateToken } from "./notification/firebase.js";
+
 function RoleAwareLanding() {
     const { user, loading } = useUserContext();
-    if (loading) return <Loading />;    
+    if (loading) return <Loading />;
     const role = user?.role;
     if (!user) return <Login />;
     if (typeof role === "undefined") return <Loading />;
@@ -45,79 +47,81 @@ function RoleAwareLanding() {
     return <Navigate to="/not-authorized" replace />;
 }
 
-export default class App extends Component {
-    render() {
-        return (
-            <Router>
-                <Routes>
-                    <Route path="/" element={<RoleAwareLanding />} />
-                    <Route path="/register" element={<Register />} />
-                    <Route path="/not-authorized" element={<NotAuthorized />} />
+export default function App() {
+    useEffect(() => {
+        generateToken();
+    }, [])
+
+    return (
+        <Router>
+            <Routes>
+                <Route path="/" element={<RoleAwareLanding />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/not-authorized" element={<NotAuthorized />} />
+                <Route
+                    path="/pending-verification"
+                    element={<PendingVerification />}
+                />
+                {/* User group */}
+                <Route
+                    element={
+                        <RequireAuth>
+                            <RequireRole allow={["user"]}>
+                                <Outlet />
+                            </RequireRole>
+                        </RequireAuth>
+                    }
+                >
+                    <Route path="/home" element={<Home />} />
+                    <Route path="/inbox" element={<Inbox />} />
+                    <Route path="/chat" element={<Chat />} />
                     <Route
-                        path="/pending-verification"
-                        element={<PendingVerification />}
+                        path="/notifications"
+                        element={<Notification />}
                     />
-                    {/* User group */}
                     <Route
-                        element={
-                            <RequireAuth>
-                                <RequireRole allow={["user"]}>
-                                    <Outlet />
-                                </RequireRole>
-                            </RequireAuth>
-                        }
-                    >
-                        <Route path="/home" element={<Home />} />
-                        <Route path="/inbox" element={<Inbox />} />
-                        <Route path="/chat" element={<Chat />} />
-                        <Route
-                            path="/notifications"
-                            element={<Notification />}
-                        />
-                        <Route
-                            path="/booking-requests"
-                            element={<OwnerBookingRequests />}
-                        />
-                        <Route path="/my-bookings" element={<MyBookings />} />
-                        <Route path="/my-ratings" element={<MyRatings />} />
-                        <Route path="/profile" element={<Profile />} />
-                        <Route path="/profile/:id" element={<Profile />} />
-                    </Route>
-                    {/* Admin group */}
+                        path="/booking-requests"
+                        element={<OwnerBookingRequests />}
+                    />
+                    <Route path="/my-bookings" element={<MyBookings />} />
+                    <Route path="/my-ratings" element={<MyRatings />} />
+                    <Route path="/profile" element={<Profile />} />
+                    <Route path="/profile/:id" element={<Profile />} />
+                </Route>
+                {/* Admin group */}
+                <Route
+                    element={
+                        <RequireAuth>
+                            <RequireRole allow={["admin"]}>
+                                <Outlet />
+                            </RequireRole>
+                        </RequireAuth>
+                    }
+                >
+                    <Route path="/adminhome" element={<AdminHome />} />
                     <Route
-                        element={
-                            <RequireAuth>
-                                <RequireRole allow={["admin"]}>
-                                    <Outlet />
-                                </RequireRole>
-                            </RequireAuth>
-                        }
-                    >
-                        <Route path="/adminhome" element={<AdminHome />} />
-                        <Route
-                            path="/pending-users"
-                            element={<PendingUser />}
-                        />
-                        <Route
-                            path="/pending-items"
-                            element={<PendingItems />}
-                        />
-                        <Route
-                            path="/renting-history"
-                            element={<ViewRentingHistory />}
-                        />
-                        <Route
-                            path="/reported-users"
-                            element={<ReportedUsers />}
-                        />
-                        <Route
-                            path="/reported-items"
-                            element={<ReportedItems />}
-                        />
-                    </Route>
-                    {/** Pending Bookings route hidden per product change (handled by lessors) **/}
-                </Routes>
-            </Router>
-        );
-    }
+                        path="/pending-users"
+                        element={<PendingUser />}
+                    />
+                    <Route
+                        path="/pending-items"
+                        element={<PendingItems />}
+                    />
+                    <Route
+                        path="/renting-history"
+                        element={<ViewRentingHistory />}
+                    />
+                    <Route
+                        path="/reported-users"
+                        element={<ReportedUsers />}
+                    />
+                    <Route
+                        path="/reported-items"
+                        element={<ReportedItems />}
+                    />
+                </Route>
+                {/** Pending Bookings route hidden per product change (handled by lessors) **/}
+            </Routes>
+        </Router>
+    );
 }
