@@ -4,6 +4,7 @@ import { Lock, Mail, Phone, Loader2 } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToastApi } from "../components/ui/toast";
+import saveFcmToken from "../hooks/save-fcmToken";
 
 function Login() {
     const MIN_NAV_DELAY = 300; // ms
@@ -111,6 +112,7 @@ function Login() {
             toast.success(`Welcome back, ${greetingName}!`);
             await delay(MIN_NAV_DELAY);
             navigateAfterLogin(profile.role);
+            await saveFcmToken(authUser.id);
         } catch (err) {
             console.error("Login error:", err.message);
             toast.error("Login failed: " + err.message);
