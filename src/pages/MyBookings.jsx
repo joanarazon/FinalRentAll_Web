@@ -19,6 +19,8 @@ import {
 import { getExistingLessorReview, saveLessorReview } from "@/lib/reviews";
 import ReportDialog from "@/components/ReportDialog";
 
+const PROOF_BUCKET = "proof-of-deposit"; // storage bucket for deposit proofs
+
 export default function MyBookings() {
     const user = useUser();
     const [loading, setLoading] = useState(true);
@@ -37,7 +39,7 @@ export default function MyBookings() {
                 const { data, error } = await supabase
                     .from("rental_transactions")
                     .select(
-                        `rental_id,item_id,start_date,end_date,total_cost,status,quantity,
+                        `rental_id,item_id,start_date,end_date,total_cost,status,quantity,proof_of_deposit_url,
                          renter:renter_id ( first_name, last_name ),
                          items (
                            title,
@@ -163,7 +165,7 @@ export default function MyBookings() {
                                     const { data, error } = await supabase
                                         .from("rental_transactions")
                                         .select(
-                                            `rental_id,item_id,start_date,end_date,total_cost,status,quantity,
+                                            `rental_id,item_id,start_date,end_date,total_cost,status,quantity,proof_of_deposit_url,
                                              renter:renter_id ( first_name, last_name ),
                                              items (
                                                title,
@@ -198,15 +200,15 @@ export default function MyBookings() {
                                     const { data, error } = await supabase
                                         .from("rental_transactions")
                                         .select(
-                                            `rental_id,item_id,start_date,end_date,total_cost,status,quantity,
-                                                                                                 renter:renter_id ( first_name, last_name ),
-                                                                                                 items (
-                                                                                                     title,
-                                                                                                     main_image_url,
-                                                                                                     user_id,
-                                                                                                     category_id,
-                                                                                                     owner:users ( first_name, last_name )
-                                                                                                 )`
+                                            `rental_id,item_id,start_date,end_date,total_cost,status,quantity,proof_of_deposit_url,
+                                                                                          renter:renter_id ( first_name, last_name ),
+                                                                                          items (
+                                                                                              title,
+                                                                                              main_image_url,
+                                                                                              user_id,
+                                                                                              category_id,
+                                                                                              owner:users ( first_name, last_name )
+                                                                                          )`
                                         )
                                         .eq("renter_id", user.id)
                                         .order("created_at", {
@@ -322,6 +324,24 @@ function Section({ title, data, onChanged, user }) {
                                             user={user}
                                         />
                                     )}
+                                    {title === "Ongoing" &&
+                                        r.status === "confirmed" && (
+                                            <UploadDeposit
+                                                rental={r}
+                                                onChanged={onChanged}
+                                            />
+                                        )}
+                                    {title === "Ongoing" &&
+                                        r.status === "deposit_submitted" && (
+                                            <ViewDepositProof rental={r} />
+                                        )}
+                                    {title === "Ongoing" &&
+                                        r.status === "on_the_way" && (
+                                            <MarkReceived
+                                                rental={r}
+                                                onChanged={onChanged}
+                                            />
+                                        )}
                                     {title === "Ongoing" &&
                                         isEligibleReturn(r) && (
                                             <MarkReturned
@@ -672,5 +692,148 @@ function DetailsModal({ rental, user }) {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+// Renter action: upload deposit proof when status is confirmed
+function UploadDeposit({ rental, onChanged }) {
+    const [open, setOpen] = useState(false);
+    const [file, setFile] = useState(null);
+    const [submitting, setSubmitting] = useState(false);
+    const toast = useToastApi();
+
+    const handleUpload = async (e) => {
+        e?.preventDefault?.();
+        if (!file) return;
+        try {
+            setSubmitting(true);
+            const ext = file.name.split(".").pop();
+            const path = `${rental.rental_id}/${Date.now()}.${ext}`;
+            const { error: upErr } = await supabase.storage
+                .from(PROOF_BUCKET)
+                .upload(path, file, {
+                    cacheControl: "3600",
+                    upsert: false,
+                    contentType: file.type || "application/octet-stream",
+                });
+            if (upErr) throw upErr;
+            const { error } = await supabase
+                .from("rental_transactions")
+                .update({
+                    // store storage key; UI will generate signed URL on demand
+                    proof_of_deposit_url: path,
+                    status: "deposit_submitted",
+                })
+                .eq("rental_id", rental.rental_id)
+                .eq("status", "confirmed");
+            if (error) throw error;
+            toast.success("Deposit uploaded. Waiting for owner verification.");
+            setOpen(false);
+            onChanged && onChanged();
+        } catch (err) {
+            toast.error(err.message || "Upload failed");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" className="cursor-pointer">
+                    Upload Deposit
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Upload deposit proof</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleUpload} className="space-y-3">
+                    <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    />
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="cursor-pointer"
+                            onClick={() => setOpen(false)}
+                            disabled={submitting}
+                        >
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={!file || submitting}>
+                            {submitting ? "Uploading…" : "Submit"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+// Renter: view deposit proof when submitted
+function ViewDepositProof({ rental }) {
+    const url = rental?.proof_of_deposit_url;
+    if (!url) return null;
+    const openProof = async () => {
+        try {
+            if (/^https?:\/\//i.test(url)) {
+                window.open(url, "_blank");
+                return;
+            }
+            const { data, error } = await supabase.storage
+                .from(PROOF_BUCKET)
+                .createSignedUrl(url, 300);
+            if (error) throw error;
+            window.open(data.signedUrl, "_blank");
+        } catch (e) {
+            alert(e.message || "Could not open proof");
+        }
+    };
+    return (
+        <Button
+            size="sm"
+            variant="outline"
+            className="cursor-pointer"
+            onClick={openProof}
+        >
+            View Deposit
+        </Button>
+    );
+}
+
+// Renter: mark item received to transition on_the_way -> ongoing
+function MarkReceived({ rental, onChanged }) {
+    const [loading, setLoading] = useState(false);
+    const toast = useToastApi();
+    const doMark = async () => {
+        try {
+            setLoading(true);
+            const { error } = await supabase
+                .from("rental_transactions")
+                .update({ status: "ongoing" })
+                .eq("rental_id", rental.rental_id)
+                .eq("status", "on_the_way");
+            if (error) throw error;
+            toast.success("Marked as received. Enjoy your rental!");
+            onChanged && onChanged();
+        } catch (e) {
+            toast.error(e.message || "Could not update");
+        } finally {
+            setLoading(false);
+        }
+    };
+    return (
+        <Button
+            size="sm"
+            onClick={doMark}
+            disabled={loading}
+            className="cursor-pointer"
+        >
+            {loading ? "Updating…" : "Mark Received"}
+        </Button>
     );
 }

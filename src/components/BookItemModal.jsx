@@ -176,6 +176,8 @@ export default function BookItemModal({
                     .eq("item_id", item.item_id)
                     .in("status", [
                         "confirmed",
+                        "deposit_submitted",
+                        "on_the_way",
                         "ongoing",
                         "awaiting_owner_confirmation",
                     ])

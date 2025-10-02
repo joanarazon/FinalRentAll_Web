@@ -4,6 +4,7 @@ import { useUser } from "../hooks/useUser";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
+const PROOF_BUCKET = "proof-of-deposit";
 import TopMenu from "../components/topMenu";
 import { useToastApi } from "@/components/ui/toast";
 import {
@@ -26,6 +27,8 @@ export default function OwnerBookingRequests({
     const [awaiting, setAwaiting] = useState([]);
     const [expired, setExpired] = useState([]);
     const [ongoing, setOngoing] = useState([]);
+    const [deposits, setDeposits] = useState([]); // deposit_submitted
+    const [enRoute, setEnRoute] = useState([]); // on_the_way
     const [cancelled, setCancelled] = useState([]);
     const [loading, setLoading] = useState(false);
     const [actionId, setActionId] = useState(null);
@@ -37,7 +40,7 @@ export default function OwnerBookingRequests({
             const { data, error } = await supabase
                 .from("rental_transactions")
                 .select(
-                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,proof_of_deposit_url,
                      items!inner(title,user_id,main_image_url),
                      renter:renter_id ( first_name,last_name )`
                 )
@@ -85,12 +88,12 @@ export default function OwnerBookingRequests({
             const { data: ong, error: e4 } = await supabase
                 .from("rental_transactions")
                 .select(
-                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,proof_of_deposit_url,
                      items!inner(title,user_id,main_image_url),
                      renter:renter_id ( first_name,last_name )`
                 )
                 .eq("items.user_id", user.id)
-                .in("status", ["confirmed", "ongoing"])
+                .in("status", ["confirmed", "ongoing"]) // note: deposit_submitted and on_the_way are separated
                 .neq("renter_id", user.id)
                 .order("start_date", { ascending: true });
             if (e4) throw e4;
@@ -110,6 +113,36 @@ export default function OwnerBookingRequests({
                 .order("created_at", { ascending: false });
             if (e5) throw e5;
             setCancelled(canx || []);
+
+            // Fetch deposit_submitted for verification
+            const { data: dep, error: e6 } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,proof_of_deposit_url,
+                     items!inner(title,user_id,main_image_url),
+                     renter:renter_id ( first_name,last_name )`
+                )
+                .eq("items.user_id", user.id)
+                .eq("status", "deposit_submitted")
+                .neq("renter_id", user.id)
+                .order("start_date", { ascending: true });
+            if (e6) throw e6;
+            setDeposits(dep || []);
+
+            // Fetch on_the_way deliveries
+            const { data: onw, error: e7 } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,proof_of_deposit_url,
+                     items!inner(title,user_id,main_image_url),
+                     renter:renter_id ( first_name,last_name )`
+                )
+                .eq("items.user_id", user.id)
+                .eq("status", "on_the_way")
+                .neq("renter_id", user.id)
+                .order("start_date", { ascending: true });
+            if (e7) throw e7;
+            setEnRoute(onw || []);
         } catch (e) {
             console.error("Load owner requests failed:", e.message);
         } finally {
@@ -249,6 +282,71 @@ export default function OwnerBookingRequests({
         }
     };
 
+    const verifyDeposit = async (txId) => {
+        setActionId(txId);
+        try {
+            const { error } = await supabase
+                .from("rental_transactions")
+                .update({ status: "on_the_way" })
+                .eq("rental_id", txId)
+                .eq("status", "deposit_submitted");
+            if (error) {
+                toast.error(
+                    `Verify failed: ${error.message || "Unknown error"}`
+                );
+                throw error;
+            } else {
+                toast.success("Deposit verified. Marked as On the Way.");
+            }
+        } catch (e) {
+            console.error("Verify deposit failed:", e.message);
+        } finally {
+            setActionId(null);
+            fetchData();
+        }
+    };
+
+    const declineDeposit = async (txId) => {
+        setActionId(txId);
+        try {
+            const { error } = await supabase
+                .from("rental_transactions")
+                .update({ status: "confirmed", proof_of_deposit_url: null }) // back to confirmed, ask renter to re-upload
+                .eq("rental_id", txId)
+                .eq("status", "deposit_submitted");
+            if (error) {
+                toast.error(
+                    `Decline failed: ${error.message || "Unknown error"}`
+                );
+                throw error;
+            } else {
+                toast.info("Deposit declined. Renter can re-upload.");
+            }
+        } catch (e) {
+            console.error("Decline deposit failed:", e.message);
+        } finally {
+            setActionId(null);
+            fetchData();
+        }
+    };
+
+    const openProof = async (pathOrUrl) => {
+        try {
+            if (!pathOrUrl) return;
+            if (/^https?:\/\//i.test(pathOrUrl)) {
+                window.open(pathOrUrl, "_blank");
+                return;
+            }
+            const { data, error } = await supabase.storage
+                .from(PROOF_BUCKET)
+                .createSignedUrl(pathOrUrl, 300);
+            if (error) throw error;
+            window.open(data.signedUrl, "_blank");
+        } catch (e) {
+            toast.error(e.message || "Cannot open proof");
+        }
+    };
+
     if (!user) return <div className="p-6">Loading...</div>;
 
     return (
@@ -381,6 +479,184 @@ export default function OwnerBookingRequests({
                     )}
                 </div>
 
+                <h2 className="text-xl font-semibold mt-8 mb-2">
+                    Deposits to Verify
+                </h2>
+                <div className="bg-white rounded-lg shadow-sm border p-4">
+                    {loading ? (
+                        <div className="text-sm text-gray-600">Loading…</div>
+                    ) : deposits.length === 0 ? (
+                        <div className="text-sm text-gray-600">
+                            No deposits awaiting verification.
+                        </div>
+                    ) : (
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b bg-gray-50">
+                                    <th className="p-2">Item</th>
+                                    <th className="p-2">Renter</th>
+                                    <th className="p-2">Dates</th>
+                                    <th className="p-2">Proof</th>
+                                    <th className="p-2">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {deposits.map((r) => (
+                                    <tr key={r.rental_id} className="border-b">
+                                        <td className="p-2 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <ImagePreviewThumb
+                                                    src={
+                                                        r.items?.main_image_url
+                                                    }
+                                                    alt={r.items?.title}
+                                                    size={40}
+                                                />
+                                                <span>
+                                                    {r.items?.title ||
+                                                        r.item_id}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {r.renter?.first_name}{" "}
+                                            {r.renter?.last_name}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {new Date(
+                                                r.start_date
+                                            ).toLocaleDateString()}{" "}
+                                            —{" "}
+                                            {new Date(
+                                                r.end_date
+                                            ).toLocaleDateString()}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {r.proof_of_deposit_url ? (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="cursor-pointer"
+                                                    onClick={() =>
+                                                        openProof(
+                                                            r.proof_of_deposit_url
+                                                        )
+                                                    }
+                                                >
+                                                    View Proof
+                                                </Button>
+                                            ) : (
+                                                "—"
+                                            )}
+                                        </td>
+                                        <td className="p-2">
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
+                                                    disabled={
+                                                        actionId === r.rental_id
+                                                    }
+                                                    onClick={() =>
+                                                        verifyDeposit(
+                                                            r.rental_id
+                                                        )
+                                                    }
+                                                >
+                                                    {actionId ===
+                                                    r.rental_id ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        "Verify & Send"
+                                                    )}
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="destructive"
+                                                    className="cursor-pointer"
+                                                    disabled={
+                                                        actionId === r.rental_id
+                                                    }
+                                                    onClick={() =>
+                                                        declineDeposit(
+                                                            r.rental_id
+                                                        )
+                                                    }
+                                                >
+                                                    {actionId ===
+                                                    r.rental_id ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        "Decline"
+                                                    )}
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+
+                <h2 className="text-xl font-semibold mt-8 mb-2">On The Way</h2>
+                <div className="bg-white rounded-lg shadow-sm border p-4">
+                    {loading ? (
+                        <div className="text-sm text-gray-600">Loading…</div>
+                    ) : enRoute.length === 0 ? (
+                        <div className="text-sm text-gray-600">
+                            No deliveries in transit.
+                        </div>
+                    ) : (
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b bg-gray-50">
+                                    <th className="p-2">Item</th>
+                                    <th className="p-2">Renter</th>
+                                    <th className="p-2">Dates</th>
+                                    <th className="p-2">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {enRoute.map((r) => (
+                                    <tr key={r.rental_id} className="border-b">
+                                        <td className="p-2 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <ImagePreviewThumb
+                                                    src={
+                                                        r.items?.main_image_url
+                                                    }
+                                                    alt={r.items?.title}
+                                                    size={40}
+                                                />
+                                                <span>
+                                                    {r.items?.title ||
+                                                        r.item_id}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {r.renter?.first_name}{" "}
+                                            {r.renter?.last_name}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {new Date(
+                                                r.start_date
+                                            ).toLocaleDateString()}{" "}
+                                            —{" "}
+                                            {new Date(
+                                                r.end_date
+                                            ).toLocaleDateString()}
+                                        </td>
+                                        <td className="p-2 text-sm capitalize">
+                                            {r.status}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
                 <h2 className="text-xl font-semibold mt-8 mb-2">
                     Awaiting Owner Confirmation
                 </h2>
