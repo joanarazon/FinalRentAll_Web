@@ -48,9 +48,8 @@ function RoleAwareLanding() {
 }
 
 export default function App() {
-    useEffect(() => {
-        generateToken();
-    }, [])
+    // Avoid prompting for Notifications automatically on load.
+    // If needed, call requestNotificationsAndToken() from a user action.
 
     return (
         <Router>
@@ -75,10 +74,7 @@ export default function App() {
                     <Route path="/home" element={<Home />} />
                     <Route path="/inbox" element={<Inbox />} />
                     <Route path="/chat" element={<Chat />} />
-                    <Route
-                        path="/notifications"
-                        element={<Notification />}
-                    />
+                    <Route path="/notifications" element={<Notification />} />
                     <Route
                         path="/booking-requests"
                         element={<OwnerBookingRequests />}
@@ -99,26 +95,14 @@ export default function App() {
                     }
                 >
                     <Route path="/adminhome" element={<AdminHome />} />
-                    <Route
-                        path="/pending-users"
-                        element={<PendingUser />}
-                    />
-                    <Route
-                        path="/pending-items"
-                        element={<PendingItems />}
-                    />
+                    <Route path="/pending-users" element={<PendingUser />} />
+                    <Route path="/pending-items" element={<PendingItems />} />
                     <Route
                         path="/renting-history"
                         element={<ViewRentingHistory />}
                     />
-                    <Route
-                        path="/reported-users"
-                        element={<ReportedUsers />}
-                    />
-                    <Route
-                        path="/reported-items"
-                        element={<ReportedItems />}
-                    />
+                    <Route path="/reported-users" element={<ReportedUsers />} />
+                    <Route path="/reported-items" element={<ReportedItems />} />
                 </Route>
                 {/** Pending Bookings route hidden per product change (handled by lessors) **/}
             </Routes>

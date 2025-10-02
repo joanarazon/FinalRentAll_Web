@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 const PROOF_BUCKET = "proof-of-deposit";
 import TopMenu from "../components/topMenu";
 import { useToastApi } from "@/components/ui/toast";
+import { ProgressLegend } from "@/components/shared/BookingSteps";
 import {
     Dialog,
     DialogContent,
@@ -15,6 +16,31 @@ import {
     DialogTitle,
     DialogFooter,
 } from "@/components/ui/dialog";
+
+function StatusBadge({ status }) {
+    const s = String(status || "").toLowerCase();
+    const map = {
+        pending: "bg-amber-100 text-amber-800 border-amber-200",
+        confirmed: "bg-green-100 text-green-800 border-green-200",
+        deposit_submitted: "bg-blue-100 text-blue-800 border-blue-200",
+        on_the_way: "bg-blue-100 text-blue-800 border-blue-200",
+        ongoing: "bg-green-100 text-green-800 border-green-200",
+        awaiting_owner_confirmation:
+            "bg-purple-100 text-purple-800 border-purple-200",
+        completed: "bg-emerald-100 text-emerald-800 border-emerald-200",
+        expired: "bg-gray-100 text-gray-700 border-gray-200",
+        cancelled: "bg-red-100 text-red-800 border-red-200",
+        rejected: "bg-red-100 text-red-800 border-red-200",
+    };
+    const cls = map[s] || "bg-gray-100 text-gray-700 border-gray-200";
+    return (
+        <span
+            className={`capitalize border ${cls} px-2 py-0.5 rounded-md text-xs`}
+        >
+            {s.replaceAll("_", " ")}
+        </span>
+    );
+}
 
 export default function OwnerBookingRequests({
     favorites,
@@ -27,11 +53,34 @@ export default function OwnerBookingRequests({
     const [awaiting, setAwaiting] = useState([]);
     const [expired, setExpired] = useState([]);
     const [ongoing, setOngoing] = useState([]);
+    const [awaitingDepositOwner, setAwaitingDepositOwner] = useState([]); // confirmed
     const [deposits, setDeposits] = useState([]); // deposit_submitted
+    const combinedDeposits = useMemo(() => {
+        // Combine confirmed and deposit_submitted; order by start_date asc, then status so confirmed appear first.
+        const list = [
+            ...(awaitingDepositOwner || []).map((r) => ({
+                ...r,
+                _phase: "awaiting_renter",
+            })),
+            ...(deposits || []).map((r) => ({ ...r, _phase: "owner_review" })),
+        ];
+        return list.sort((a, b) => {
+            const as = new Date(a.start_date).getTime();
+            const bs = new Date(b.start_date).getTime();
+            if (as !== bs) return as - bs;
+            // Put awaiting_renter (confirmed) before owner_review (deposit_submitted) for same start date
+            const aw = a._phase === "awaiting_renter" ? 0 : 1;
+            const bw = b._phase === "awaiting_renter" ? 0 : 1;
+            return aw - bw;
+        });
+    }, [awaitingDepositOwner, deposits]);
     const [enRoute, setEnRoute] = useState([]); // on_the_way
     const [cancelled, setCancelled] = useState([]);
     const [loading, setLoading] = useState(false);
     const [actionId, setActionId] = useState(null);
+    const [proofOpen, setProofOpen] = useState(false);
+    const [proofSrc, setProofSrc] = useState(null);
+    const [proofTitle, setProofTitle] = useState("");
 
     const fetchData = useCallback(async () => {
         if (!user?.id) return;
@@ -84,7 +133,7 @@ export default function OwnerBookingRequests({
             if (e3) throw e3;
             setExpired(exp || []);
 
-            // Fetch ongoing/confirmed rentals for this owner
+            // Fetch ongoing rentals for this owner (exclude confirmed)
             const { data: ong, error: e4 } = await supabase
                 .from("rental_transactions")
                 .select(
@@ -93,13 +142,28 @@ export default function OwnerBookingRequests({
                      renter:renter_id ( first_name,last_name )`
                 )
                 .eq("items.user_id", user.id)
-                .in("status", ["confirmed", "ongoing"]) // note: deposit_submitted and on_the_way are separated
+                .eq("status", "ongoing")
                 .neq("renter_id", user.id)
                 .order("start_date", { ascending: true });
             if (e4) throw e4;
             setOngoing(ong || []);
 
-            // Fetch cancelled for this owner
+            // Fetch confirmed awaiting renter deposit
+            const { data: conf, error: e4b } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,
+                     items!inner(title,user_id,main_image_url),
+                     renter:renter_id ( first_name,last_name )`
+                )
+                .eq("items.user_id", user.id)
+                .eq("status", "confirmed")
+                .neq("renter_id", user.id)
+                .order("start_date", { ascending: true });
+            if (e4b) throw e4b;
+            setAwaitingDepositOwner(conf || []);
+
+            // Fetch cancelled/rejected for this owner
             const { data: canx, error: e5 } = await supabase
                 .from("rental_transactions")
                 .select(
@@ -108,7 +172,7 @@ export default function OwnerBookingRequests({
                      renter:renter_id ( first_name,last_name )`
                 )
                 .eq("items.user_id", user.id)
-                .eq("status", "cancelled")
+                .in("status", ["cancelled", "rejected"])
                 .neq("renter_id", user.id)
                 .order("created_at", { ascending: false });
             if (e5) throw e5;
@@ -330,18 +394,20 @@ export default function OwnerBookingRequests({
         }
     };
 
-    const openProof = async (pathOrUrl) => {
+    const openProof = async (pathOrUrl, title = "Deposit Proof") => {
         try {
             if (!pathOrUrl) return;
-            if (/^https?:\/\//i.test(pathOrUrl)) {
-                window.open(pathOrUrl, "_blank");
-                return;
+            let url = pathOrUrl;
+            if (!/^https?:\/\//i.test(pathOrUrl)) {
+                const { data, error } = await supabase.storage
+                    .from(PROOF_BUCKET)
+                    .createSignedUrl(pathOrUrl, 300);
+                if (error) throw error;
+                url = data.signedUrl;
             }
-            const { data, error } = await supabase.storage
-                .from(PROOF_BUCKET)
-                .createSignedUrl(pathOrUrl, 300);
-            if (error) throw error;
-            window.open(data.signedUrl, "_blank");
+            setProofTitle(title || "Deposit Proof");
+            setProofSrc(url);
+            setProofOpen(true);
         } catch (e) {
             toast.error(e.message || "Cannot open proof");
         }
@@ -358,10 +424,36 @@ export default function OwnerBookingRequests({
                 setSearchTerm={setSearchTerm}
             />
             <div className="max-w-5xl mx-auto p-6">
-                <h1 className="text-2xl font-bold mb-1">Booking Requests</h1>
-                <p className="text-gray-600 mb-4">
-                    Pending requests for items you own
-                </p>
+                <div className="flex items-baseline justify-between mb-4">
+                    <div>
+                        <h1 className="text-2xl font-bold">Booking Requests</h1>
+                        <p className="text-gray-600">
+                            Manage requests and deliveries
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                        <span className="bg-amber-100 text-amber-800 border border-amber-200 rounded px-2 py-0.5">
+                            Pending: {rows.length}
+                        </span>
+                        <span className="bg-blue-100 text-blue-800 border border-blue-200 rounded px-2 py-0.5">
+                            Deposits (combined): {combinedDeposits.length}
+                        </span>
+                        <span className="bg-blue-100 text-blue-800 border border-blue-200 rounded px-2 py-0.5">
+                            On the way: {enRoute.length}
+                        </span>
+                        <span className="bg-green-100 text-green-800 border border-green-200 rounded px-2 py-0.5">
+                            Ongoing: {ongoing.length}
+                        </span>
+                    </div>
+                </div>
+                <div className="border bg-white/60 rounded-md p-3 mb-3">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <span className="text-sm font-medium text-gray-700">
+                            Booking progress
+                        </span>
+                        <ProgressLegend />
+                    </div>
+                </div>
                 <div className="flex justify-end mb-3">
                     <Button
                         variant="outline"
@@ -479,15 +571,16 @@ export default function OwnerBookingRequests({
                     )}
                 </div>
 
-                <h2 className="text-xl font-semibold mt-8 mb-2">
-                    Deposits to Verify
-                </h2>
+                <h2 className="text-xl font-semibold mt-8 mb-2">Deposits</h2>
+                <p className="text-xs text-gray-600 mb-2">
+                    Review the deposit and confirm to send the item.
+                </p>
                 <div className="bg-white rounded-lg shadow-sm border p-4">
                     {loading ? (
                         <div className="text-sm text-gray-600">Loading…</div>
-                    ) : deposits.length === 0 ? (
+                    ) : combinedDeposits.length === 0 ? (
                         <div className="text-sm text-gray-600">
-                            No deposits awaiting verification.
+                            No bookings in deposit phase.
                         </div>
                     ) : (
                         <table className="w-full text-left border-collapse">
@@ -501,7 +594,7 @@ export default function OwnerBookingRequests({
                                 </tr>
                             </thead>
                             <tbody>
-                                {deposits.map((r) => (
+                                {combinedDeposits.map((r) => (
                                     <tr key={r.rental_id} className="border-b">
                                         <td className="p-2 text-sm">
                                             <div className="flex items-center gap-2">
@@ -532,64 +625,80 @@ export default function OwnerBookingRequests({
                                             ).toLocaleDateString()}
                                         </td>
                                         <td className="p-2 text-sm">
-                                            {r.proof_of_deposit_url ? (
+                                            {r._phase === "owner_review" &&
+                                            r.proof_of_deposit_url ? (
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
                                                     className="cursor-pointer"
                                                     onClick={() =>
                                                         openProof(
-                                                            r.proof_of_deposit_url
+                                                            r.proof_of_deposit_url,
+                                                            r.items?.title ||
+                                                                "Deposit Proof"
                                                         )
                                                     }
                                                 >
                                                     View Proof
                                                 </Button>
+                                            ) : r._phase ===
+                                              "awaiting_renter" ? (
+                                                "Awaiting renter upload"
                                             ) : (
                                                 "—"
                                             )}
                                         </td>
                                         <td className="p-2">
                                             <div className="flex gap-2">
-                                                <Button
-                                                    size="sm"
-                                                    className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
-                                                    disabled={
-                                                        actionId === r.rental_id
-                                                    }
-                                                    onClick={() =>
-                                                        verifyDeposit(
-                                                            r.rental_id
-                                                        )
-                                                    }
-                                                >
-                                                    {actionId ===
-                                                    r.rental_id ? (
-                                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                                    ) : (
-                                                        "Verify & Send"
-                                                    )}
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="destructive"
-                                                    className="cursor-pointer"
-                                                    disabled={
-                                                        actionId === r.rental_id
-                                                    }
-                                                    onClick={() =>
-                                                        declineDeposit(
-                                                            r.rental_id
-                                                        )
-                                                    }
-                                                >
-                                                    {actionId ===
-                                                    r.rental_id ? (
-                                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                                    ) : (
-                                                        "Decline"
-                                                    )}
-                                                </Button>
+                                                {r._phase === "owner_review" ? (
+                                                    <>
+                                                        <Button
+                                                            size="sm"
+                                                            className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
+                                                            disabled={
+                                                                actionId ===
+                                                                r.rental_id
+                                                            }
+                                                            onClick={() =>
+                                                                verifyDeposit(
+                                                                    r.rental_id
+                                                                )
+                                                            }
+                                                        >
+                                                            {actionId ===
+                                                            r.rental_id ? (
+                                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                            ) : (
+                                                                "Verify & Send"
+                                                            )}
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="destructive"
+                                                            className="cursor-pointer"
+                                                            disabled={
+                                                                actionId ===
+                                                                r.rental_id
+                                                            }
+                                                            onClick={() =>
+                                                                declineDeposit(
+                                                                    r.rental_id
+                                                                )
+                                                            }
+                                                        >
+                                                            {actionId ===
+                                                            r.rental_id ? (
+                                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                            ) : (
+                                                                "Decline"
+                                                            )}
+                                                        </Button>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-xs text-gray-600">
+                                                        Waiting for renter
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -649,7 +758,7 @@ export default function OwnerBookingRequests({
                                             ).toLocaleDateString()}
                                         </td>
                                         <td className="p-2 text-sm capitalize">
-                                            {r.status}
+                                            <StatusBadge status={r.status} />
                                         </td>
                                     </tr>
                                 ))}
@@ -874,7 +983,7 @@ export default function OwnerBookingRequests({
                                             )}
                                         </td>
                                         <td className="p-2 text-sm capitalize">
-                                            {r.status}
+                                            <StatusBadge status={r.status} />
                                         </td>
                                     </tr>
                                 ))}
@@ -884,14 +993,14 @@ export default function OwnerBookingRequests({
                 </div>
 
                 <h2 className="text-xl font-semibold mt-8 mb-2">
-                    Cancelled Bookings
+                    Cancelled / Rejected
                 </h2>
                 <div className="bg-white rounded-lg shadow-sm border p-4">
                     {loading ? (
                         <div className="text-sm text-gray-600">Loading…</div>
                     ) : cancelled.length === 0 ? (
                         <div className="text-sm text-gray-600">
-                            No cancelled bookings.
+                            No cancelled or rejected bookings.
                         </div>
                     ) : (
                         <table className="w-full text-left border-collapse">
@@ -942,7 +1051,7 @@ export default function OwnerBookingRequests({
                                             )}
                                         </td>
                                         <td className="p-2 text-sm capitalize">
-                                            {r.status}
+                                            <StatusBadge status={r.status} />
                                         </td>
                                     </tr>
                                 ))}
@@ -1008,7 +1117,7 @@ export default function OwnerBookingRequests({
                                             )}
                                         </td>
                                         <td className="p-2 text-sm capitalize">
-                                            {r.status}
+                                            <StatusBadge status={r.status} />
                                         </td>
                                     </tr>
                                 ))}
@@ -1016,6 +1125,12 @@ export default function OwnerBookingRequests({
                         </table>
                     )}
                 </div>
+                <ProofPreviewModal
+                    open={proofOpen}
+                    onOpenChange={setProofOpen}
+                    src={proofSrc}
+                    title={proofTitle}
+                />
             </div>
         </div>
     );
@@ -1122,6 +1237,40 @@ function RequestDetailsDialog({ row, awaiting = false }) {
                                       ).toLocaleString()
                                     : "—"}
                             </span>
+                        </div>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function ProofPreviewModal({ open, onOpenChange, src, title }) {
+    const isPdf = typeof src === "string" && src.toLowerCase().includes(".pdf");
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                    <DialogTitle>{title || "Deposit Proof"}</DialogTitle>
+                </DialogHeader>
+                <div className="w-full max-h-[70vh] overflow-auto">
+                    {src ? (
+                        isPdf ? (
+                            <iframe
+                                src={src}
+                                title={title || "Deposit Proof"}
+                                className="w-full h-[70vh] border rounded"
+                            />
+                        ) : (
+                            <img
+                                src={src}
+                                alt={title || "Deposit Proof"}
+                                className="w-full h-auto rounded border"
+                            />
+                        )
+                    ) : (
+                        <div className="text-sm text-gray-600">
+                            No proof available.
                         </div>
                     )}
                 </div>
