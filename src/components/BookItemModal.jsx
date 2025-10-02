@@ -170,9 +170,9 @@ export default function BookItemModal({
                 const toStr = `${to.getFullYear()}-${String(
                     to.getMonth() + 1
                 ).padStart(2, "0")}-${String(to.getDate()).padStart(2, "0")}`;
-                const { count } = await supabase
+                const { data, error } = await supabase
                     .from("rental_transactions")
-                    .select("*", { count: "exact", head: true })
+                    .select("quantity")
                     .eq("item_id", item.item_id)
                     .in("status", [
                         "confirmed",
@@ -181,8 +181,11 @@ export default function BookItemModal({
                     ])
                     .lte("start_date", toStr)
                     .gte("end_date", fromStr);
-                const overlaps = Number(count || 0);
-                const rem = Math.max(0, (Number(quantity) || 1) - overlaps);
+                if (error) throw error;
+                const booked = Array.isArray(data)
+                    ? data.reduce((s, r) => s + Number(r.quantity || 0), 0)
+                    : 0;
+                const rem = Math.max(0, (Number(quantity) || 1) - booked);
                 setRemaining(rem);
                 setRequestedUnits((prev) =>
                     Math.min(Math.max(1, prev || 1), rem || 1)
@@ -319,13 +322,15 @@ export default function BookItemModal({
             const perUnitCost =
                 Number(item?.price_per_day || 0) * daysCount +
                 Number(item?.deposit_fee || 0);
-            const rows = Array.from({ length: unitsToBook }, () => ({
+            const total_cost = perUnitCost * unitsToBook;
+            const row = {
                 ...base,
-                total_cost: perUnitCost,
-            }));
+                quantity: unitsToBook,
+                total_cost,
+            };
             const { error } = await supabase
                 .from("rental_transactions")
-                .insert(rows);
+                .insert(row);
             if (error) {
                 setErrorMsg(
                     "Booking could not be created. The selected dates may be fully booked."

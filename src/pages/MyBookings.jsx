@@ -37,7 +37,7 @@ export default function MyBookings() {
                 const { data, error } = await supabase
                     .from("rental_transactions")
                     .select(
-                        `rental_id,item_id,start_date,end_date,total_cost,status,
+                        `rental_id,item_id,start_date,end_date,total_cost,status,quantity,
                          renter:renter_id ( first_name, last_name ),
                          items (
                            title,
@@ -68,13 +68,20 @@ export default function MyBookings() {
     }, [user?.id]);
 
     const grouped = useMemo(() => {
-        const by = { pending: [], ongoing: [], completed: [], expired: [] };
+        const by = {
+            pending: [],
+            ongoing: [],
+            completed: [],
+            expired: [],
+            cancelled: [],
+        };
         for (const r of rows) {
             const st = String(r.status || "");
             if (st === "completed") by.completed.push(r);
             else if (st === "expired") by.expired.push(r);
+            else if (st === "cancelled") by.cancelled.push(r);
             else if (st === "pending") by.pending.push(r);
-            else by.ongoing.push(r); // includes confirmed, ongoing, cancelled? keep it simple
+            else by.ongoing.push(r); // includes confirmed, ongoing
         }
         const term = search.trim().toLowerCase();
         const activeCategory = (categoryFilter || "").trim();
@@ -93,6 +100,7 @@ export default function MyBookings() {
             ongoing: filter(by.ongoing),
             completed: filter(by.completed),
             expired: filter(by.expired),
+            cancelled: filter(by.cancelled),
         };
     }, [rows, search, categoryFilter]);
 
@@ -155,7 +163,7 @@ export default function MyBookings() {
                                     const { data, error } = await supabase
                                         .from("rental_transactions")
                                         .select(
-                                            `rental_id,item_id,start_date,end_date,total_cost,status,
+                                            `rental_id,item_id,start_date,end_date,total_cost,status,quantity,
                                              renter:renter_id ( first_name, last_name ),
                                              items (
                                                title,
@@ -190,7 +198,7 @@ export default function MyBookings() {
                                     const { data, error } = await supabase
                                         .from("rental_transactions")
                                         .select(
-                                            `rental_id,item_id,start_date,end_date,total_cost,status,
+                                            `rental_id,item_id,start_date,end_date,total_cost,status,quantity,
                                                                                                  renter:renter_id ( first_name, last_name ),
                                                                                                  items (
                                                                                                      title,
@@ -222,6 +230,12 @@ export default function MyBookings() {
                     <Section
                         title="Expired"
                         data={grouped.expired}
+                        user={user}
+                    />
+                    <Separator />
+                    <Section
+                        title="Cancelled"
+                        data={grouped.cancelled}
                         user={user}
                     />
                 </div>
@@ -572,42 +586,13 @@ function ImagePreviewThumb({ src, alt }) {
 function DetailsModal({ rental, user }) {
     const [open, setOpen] = useState(false);
     const [unitsCount, setUnitsCount] = useState(null);
-    const [countLoading, setCountLoading] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
         if (!open) return;
-        let canceled = false;
-        (async () => {
-            try {
-                setCountLoading(true);
-                const { count, error } = await supabase
-                    .from("rental_transactions")
-                    .select("*", { count: "exact", head: true })
-                    .eq("item_id", rental.item_id)
-                    .eq("renter_id", user?.id)
-                    .eq("start_date", rental.start_date)
-                    .eq("end_date", rental.end_date)
-                    .eq("status", rental.status);
-                if (error) throw error;
-                if (!canceled) setUnitsCount(Number(count || 0));
-            } catch (e) {
-                if (!canceled) setUnitsCount(1);
-            } finally {
-                if (!canceled) setCountLoading(false);
-            }
-        })();
-        return () => {
-            canceled = true;
-        };
-    }, [
-        open,
-        rental.item_id,
-        rental.start_date,
-        rental.end_date,
-        rental.status,
-        user?.id,
-    ]);
+        // Units involved is simply this row's quantity per schema
+        setUnitsCount(Number(rental.quantity ?? 1));
+    }, [open, rental.quantity]);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -661,9 +646,7 @@ function DetailsModal({ rental, user }) {
                     </div>
                     <div className="flex justify-between">
                         <span>Units involved</span>
-                        <span>
-                            {countLoading ? "Loading…" : unitsCount ?? "—"}
-                        </span>
+                        <span>{unitsCount ?? "—"}</span>
                     </div>
                 </div>
                 <DialogFooter className="flex items-center justify-between">

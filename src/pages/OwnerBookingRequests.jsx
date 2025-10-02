@@ -25,6 +25,8 @@ export default function OwnerBookingRequests({
     const [rows, setRows] = useState([]);
     const [awaiting, setAwaiting] = useState([]);
     const [expired, setExpired] = useState([]);
+    const [ongoing, setOngoing] = useState([]);
+    const [cancelled, setCancelled] = useState([]);
     const [loading, setLoading] = useState(false);
     const [actionId, setActionId] = useState(null);
 
@@ -35,7 +37,7 @@ export default function OwnerBookingRequests({
             const { data, error } = await supabase
                 .from("rental_transactions")
                 .select(
-                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,
                      items!inner(title,user_id,main_image_url),
                      renter:renter_id ( first_name,last_name )`
                 )
@@ -53,7 +55,7 @@ export default function OwnerBookingRequests({
             const { data: ret, error: e2 } = await supabase
                 .from("rental_transactions")
                 .select(
-                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,renter_return_marked_at,
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,renter_return_marked_at,
                      items!inner(title,user_id,main_image_url),
                      renter:renter_id ( first_name,last_name )`
                 )
@@ -68,7 +70,7 @@ export default function OwnerBookingRequests({
             const { data: exp, error: e3 } = await supabase
                 .from("rental_transactions")
                 .select(
-                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,
                      items!inner(title,user_id,main_image_url),
                      renter:renter_id ( first_name,last_name )`
                 )
@@ -78,6 +80,36 @@ export default function OwnerBookingRequests({
                 .order("start_date", { ascending: false });
             if (e3) throw e3;
             setExpired(exp || []);
+
+            // Fetch ongoing/confirmed rentals for this owner
+            const { data: ong, error: e4 } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,
+                     items!inner(title,user_id,main_image_url),
+                     renter:renter_id ( first_name,last_name )`
+                )
+                .eq("items.user_id", user.id)
+                .in("status", ["confirmed", "ongoing"])
+                .neq("renter_id", user.id)
+                .order("start_date", { ascending: true });
+            if (e4) throw e4;
+            setOngoing(ong || []);
+
+            // Fetch cancelled for this owner
+            const { data: canx, error: e5 } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,
+                     items!inner(title,user_id,main_image_url),
+                     renter:renter_id ( first_name,last_name )`
+                )
+                .eq("items.user_id", user.id)
+                .eq("status", "cancelled")
+                .neq("renter_id", user.id)
+                .order("created_at", { ascending: false });
+            if (e5) throw e5;
+            setCancelled(canx || []);
         } catch (e) {
             console.error("Load owner requests failed:", e.message);
         } finally {
@@ -507,6 +539,142 @@ export default function OwnerBookingRequests({
                     )}
                 </div>
 
+                <h2 className="text-xl font-semibold mt-8 mb-2">
+                    Ongoing Rentals
+                </h2>
+                <div className="bg-white rounded-lg shadow-sm border p-4">
+                    {loading ? (
+                        <div className="text-sm text-gray-600">Loading…</div>
+                    ) : ongoing.length === 0 ? (
+                        <div className="text-sm text-gray-600">
+                            No ongoing rentals.
+                        </div>
+                    ) : (
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b bg-gray-50">
+                                    <th className="p-2">Item</th>
+                                    <th className="p-2">Renter</th>
+                                    <th className="p-2">Dates</th>
+                                    <th className="p-2">Total</th>
+                                    <th className="p-2">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {ongoing.map((r) => (
+                                    <tr key={r.rental_id} className="border-b">
+                                        <td className="p-2 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <ImagePreviewThumb
+                                                    src={
+                                                        r.items?.main_image_url
+                                                    }
+                                                    alt={r.items?.title}
+                                                    size={40}
+                                                />
+                                                <span>
+                                                    {r.items?.title ||
+                                                        r.item_id}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {r.renter?.first_name}{" "}
+                                            {r.renter?.last_name}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {new Date(
+                                                r.start_date
+                                            ).toLocaleDateString()}{" "}
+                                            —{" "}
+                                            {new Date(
+                                                r.end_date
+                                            ).toLocaleDateString()}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            ₱
+                                            {Number(r.total_cost || 0).toFixed(
+                                                2
+                                            )}
+                                        </td>
+                                        <td className="p-2 text-sm capitalize">
+                                            {r.status}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+
+                <h2 className="text-xl font-semibold mt-8 mb-2">
+                    Cancelled Bookings
+                </h2>
+                <div className="bg-white rounded-lg shadow-sm border p-4">
+                    {loading ? (
+                        <div className="text-sm text-gray-600">Loading…</div>
+                    ) : cancelled.length === 0 ? (
+                        <div className="text-sm text-gray-600">
+                            No cancelled bookings.
+                        </div>
+                    ) : (
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b bg-gray-50">
+                                    <th className="p-2">Item</th>
+                                    <th className="p-2">Renter</th>
+                                    <th className="p-2">Dates</th>
+                                    <th className="p-2">Total</th>
+                                    <th className="p-2">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {cancelled.map((r) => (
+                                    <tr key={r.rental_id} className="border-b">
+                                        <td className="p-2 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <ImagePreviewThumb
+                                                    src={
+                                                        r.items?.main_image_url
+                                                    }
+                                                    alt={r.items?.title}
+                                                    size={40}
+                                                />
+                                                <span>
+                                                    {r.items?.title ||
+                                                        r.item_id}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {r.renter?.first_name}{" "}
+                                            {r.renter?.last_name}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {new Date(
+                                                r.start_date
+                                            ).toLocaleDateString()}{" "}
+                                            —{" "}
+                                            {new Date(
+                                                r.end_date
+                                            ).toLocaleDateString()}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            ₱
+                                            {Number(r.total_cost || 0).toFixed(
+                                                2
+                                            )}
+                                        </td>
+                                        <td className="p-2 text-sm capitalize">
+                                            {r.status}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+
                 <h2 className="text-xl font-semibold mt-8 mb-2">Expired</h2>
                 <div className="bg-white rounded-lg shadow-sm border p-4">
                     {loading ? (
@@ -604,44 +772,12 @@ function ImagePreviewThumb({ src, alt, size = 40 }) {
 function RequestDetailsDialog({ row, awaiting = false }) {
     const [open, setOpen] = useState(false);
     const [unitsCount, setUnitsCount] = useState(null);
-    const [countLoading, setCountLoading] = useState(false);
 
     useEffect(() => {
         if (!open) return;
-        let canceled = false;
-        (async () => {
-            try {
-                setCountLoading(true);
-                const status = awaiting
-                    ? "awaiting_owner_confirmation"
-                    : "pending";
-                const { count, error } = await supabase
-                    .from("rental_transactions")
-                    .select("*", { count: "exact", head: true })
-                    .eq("item_id", row.item_id)
-                    .eq("renter_id", row.renter_id)
-                    .eq("start_date", row.start_date)
-                    .eq("end_date", row.end_date)
-                    .eq("status", status);
-                if (error) throw error;
-                if (!canceled) setUnitsCount(Number(count || 0));
-            } catch (e) {
-                if (!canceled) setUnitsCount(1);
-            } finally {
-                if (!canceled) setCountLoading(false);
-            }
-        })();
-        return () => {
-            canceled = true;
-        };
-    }, [
-        open,
-        row.item_id,
-        row.renter_id,
-        row.start_date,
-        row.end_date,
-        awaiting,
-    ]);
+        // Units involved is simply this row's quantity
+        setUnitsCount(Number(row.quantity ?? 1));
+    }, [open, row.quantity]);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -686,13 +822,7 @@ function RequestDetailsDialog({ row, awaiting = false }) {
                     </div>
                     <div className="flex justify-between">
                         <span>Units involved</span>
-                        <span>
-                            {countLoading
-                                ? "Loading…"
-                                : unitsCount != null
-                                ? unitsCount
-                                : "—"}
-                        </span>
+                        <span>{unitsCount ?? "—"}</span>
                     </div>
                     {awaiting && (
                         <div className="flex justify-between">
