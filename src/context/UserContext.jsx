@@ -10,8 +10,8 @@ import { supabase } from "../../supabaseClient";
 const UserContext = createContext({
     user: null,
     loading: true,
-    logout: async () => {},
-    refresh: async () => {},
+    logout: async () => { },
+    refresh: async () => { },
 });
 
 export function UserProvider({ children }) {
@@ -51,7 +51,7 @@ export function UserProvider({ children }) {
                 localStorage.removeItem("loggedInUser");
                 setUser(null);
             }
-        } catch (_) {}
+        } catch (_) { }
     };
 
     useEffect(() => {
@@ -121,10 +121,18 @@ export function UserProvider({ children }) {
     }, []);
 
     const logout = async () => {
-        await supabase.auth.signOut();
-        localStorage.removeItem("loggedInUser");
-        setUser(null);
+        try {
+            const { error } = await supabase.auth.signOut({ scope: "local" });
+            if (error) throw error;
+        } catch (err) {
+            console.warn("Supabase logout error (ignored):", err.message);
+        } finally {
+            // Clear local state anyway
+            setUser(null);
+            localStorage.removeItem("supabase.auth.token"); // optional, clear manually
+        }
     };
+
 
     const value = useMemo(
         () => ({ user, loading, logout, refresh }),
