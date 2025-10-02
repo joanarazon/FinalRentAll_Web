@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useUserContext } from "../context/UserContext.jsx";
-import Loading from "./Loading.jsx";
+// import Loading from "./Loading.jsx";
 import { useToastApi } from "@/components/ui/toast";
 
 export default function RequireRole({
@@ -28,7 +28,7 @@ export default function RequireRole({
         }
     }, [loading, unauthorized, toast]);
 
-    if (loading || waitingOnRole) return <Loading />;
+    // if (loading || waitingOnRole) return <Loading />;
     if (unauthorized) {
         return <Navigate to={to} replace state={{ from: location }} />;
     }

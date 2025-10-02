@@ -84,11 +84,20 @@ export function useToast() {
 
 export function useToastApi() {
     const { push } = useToast();
-    return {
-        success: (message, opts = {}) =>
-            push({ type: "success", message, ...opts }),
-        error: (message, opts = {}) =>
-            push({ type: "error", message, ...opts }),
-        info: (message, opts = {}) => push({ type: "info", message, ...opts }),
-    };
+    const success = useCallback(
+        (message, opts = {}) => push({ type: "success", message, ...opts }),
+        [push]
+    );
+    const error = useCallback(
+        (message, opts = {}) => push({ type: "error", message, ...opts }),
+        [push]
+    );
+    const info = useCallback(
+        (message, opts = {}) => push({ type: "info", message, ...opts }),
+        [push]
+    );
+    return React.useMemo(
+        () => ({ success, error, info }),
+        [success, error, info]
+    );
 }

@@ -6,7 +6,7 @@ import {
     CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart } from "lucide-react";
+import { Heart, MessageCircle } from "lucide-react";
 
 function ItemCard({
     title,
@@ -21,6 +21,7 @@ function ItemCard({
     isFavorited,
     isOwner,
     onRentClick,
+    onMessageOwner,
 }) {
     return (
         <Card
@@ -65,7 +66,7 @@ function ItemCard({
                 <div className="mt-2 text-sm text-gray-600 space-y-1">
                     {location && <p>{location}</p>}
                     {date && <p>{date}</p>}
-                    <div className="flex flex-row justify-between items-center">
+                    <div className="flex flex-row justify-between items-center gap-2">
                         {price && (
                             <p className="text-[#FFAB00] font-bold text-xl">
                                 ₱{price}/day
@@ -77,15 +78,31 @@ function ItemCard({
                                 {(Number(quantity) || 1) > 1 ? "s" : ""}
                             </p>
                         )}
-                        <Button
-                            className={`cursor-pointer ${
-                                isOwner ? "opacity-60 cursor-not-allowed" : ""
-                            }`}
-                            disabled={isOwner}
-                            onClick={!isOwner ? onRentClick : undefined}
-                        >
-                            <p>{isOwner ? "Your Item" : "Rent Now"}</p>
-                        </Button>
+                        <div className="ml-auto flex items-center gap-2">
+                            {onMessageOwner && !isOwner && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="cursor-pointer"
+                                    onClick={onMessageOwner}
+                                    title="Message owner"
+                                >
+                                    <MessageCircle className="w-4 h-4 mr-1" />
+                                    Message
+                                </Button>
+                            )}
+                            <Button
+                                className={`cursor-pointer ${
+                                    isOwner
+                                        ? "opacity-60 cursor-not-allowed"
+                                        : ""
+                                }`}
+                                disabled={isOwner}
+                                onClick={!isOwner ? onRentClick : undefined}
+                            >
+                                <p>{isOwner ? "Your Item" : "Rent Now"}</p>
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </CardContent>

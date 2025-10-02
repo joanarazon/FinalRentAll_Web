@@ -15,6 +15,8 @@ import AdminHome from "./pages/admin/AdminHome";
 import PendingUser from "./pages/admin/pages/PendingUser";
 import PendingItems from "./pages/admin/pages/PendingItems";
 import ViewRentingHistory from "./pages/admin/pages/ViewRentingHistory";
+import ReportedUsers from "./pages/admin/pages/ReportedUsers";
+import ReportedItems from "./pages/admin/pages/ReportedItems";
 // PendingBookings view intentionally hidden from admin routing
 // import PendingBookings from "./pages/admin/pages/PendingBookings";
 import OwnerBookingRequests from "./pages/OwnerBookingRequests";
@@ -27,10 +29,11 @@ import Profile from "./pages/Profile";
 import { useUserContext } from "./context/UserContext.jsx";
 import Loading from "./components/Loading.jsx";
 import PendingVerification from "./pages/PendingVerification.jsx";
+import Chat from "./components/Chat.jsx";
 
 function RoleAwareLanding() {
     const { user, loading } = useUserContext();
-    if (loading) return <Loading />;
+    if (loading) return <Loading />;    
     const role = user?.role;
     if (!user) return <Login />;
     if (typeof role === "undefined") return <Loading />;
@@ -66,6 +69,7 @@ export default class App extends Component {
                     >
                         <Route path="/home" element={<Home />} />
                         <Route path="/inbox" element={<Inbox />} />
+                        <Route path="/chat" element={<Chat />} />
                         <Route
                             path="/notifications"
                             element={<Notification />}
@@ -77,6 +81,7 @@ export default class App extends Component {
                         <Route path="/my-bookings" element={<MyBookings />} />
                         <Route path="/my-ratings" element={<MyRatings />} />
                         <Route path="/profile" element={<Profile />} />
+                        <Route path="/profile/:id" element={<Profile />} />
                     </Route>
                     {/* Admin group */}
                     <Route
@@ -100,6 +105,14 @@ export default class App extends Component {
                         <Route
                             path="/renting-history"
                             element={<ViewRentingHistory />}
+                        />
+                        <Route
+                            path="/reported-users"
+                            element={<ReportedUsers />}
+                        />
+                        <Route
+                            path="/reported-items"
+                            element={<ReportedItems />}
                         />
                     </Route>
                     {/** Pending Bookings route hidden per product change (handled by lessors) **/}

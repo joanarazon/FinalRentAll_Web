@@ -1,7 +1,7 @@
 // src/components/AdminSidebarMenu.jsx
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Users, PackageSearch, History, Clock } from "lucide-react";
+import { Users, PackageSearch, History, ShieldAlert } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { LayoutDashboard } from "lucide-react";
 
@@ -18,6 +18,8 @@ export default function AdminSidebarMenu() {
             label: "View Renting History",
             icon: History,
         },
+        { to: "/reported-users", label: "Reported Users", icon: ShieldAlert },
+        { to: "/reported-items", label: "Reported Items", icon: ShieldAlert },
     ];
 
     const linkClass = (to) =>
