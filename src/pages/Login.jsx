@@ -4,6 +4,7 @@ import { Lock, Mail, Phone, Loader2 } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToastApi } from "../components/ui/toast";
+import saveFcmToken from "../hooks/save-fcmToken";
 
 function Login() {
     const MIN_NAV_DELAY = 300; // ms
@@ -42,9 +43,8 @@ function Login() {
                 });
             }
             if (role === "user") {
-                // Users attempting to access admin should go to Home instead
-                if (isAdminRoute) return navigate("/home", { replace: true });
-                return navigate(from, { replace: true });
+                // 👇 Always force home instead of "from"
+                return navigate("/home", { replace: true });
             }
             // Unknown role is unauthorized
             return navigate("/not-authorized", { replace: true });
@@ -112,6 +112,7 @@ function Login() {
             toast.success(`Welcome back, ${greetingName}!`);
             await delay(MIN_NAV_DELAY);
             navigateAfterLogin(profile.role);
+            await saveFcmToken(authUser.id);
         } catch (err) {
             console.error("Login error:", err.message);
             toast.error("Login failed: " + err.message);
@@ -232,11 +233,10 @@ function Login() {
                         <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
                             <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
-                                    loginMethod === "password"
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "password"
                                         ? "bg-[#1e1e1e] text-white shadow"
                                         : "text-gray-700 hover:bg-gray-200"
-                                }`}
+                                    }`}
                                 onClick={() => setLoginMethod("password")}
                             >
                                 <Lock size={16} />
@@ -244,11 +244,10 @@ function Login() {
                             </button>
                             <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
-                                    loginMethod === "email_otp"
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "email_otp"
                                         ? "bg-[#1e1e1e] text-white shadow"
                                         : "text-gray-700 hover:bg-gray-200"
-                                }`}
+                                    }`}
                                 onClick={() => setLoginMethod("email_otp")}
                             >
                                 <Mail size={16} />
@@ -256,11 +255,10 @@ function Login() {
                             </button>
                             <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
-                                    loginMethod === "sms_otp"
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "sms_otp"
                                         ? "bg-[#1e1e1e] text-white shadow"
                                         : "text-gray-700 hover:bg-gray-200"
-                                }`}
+                                    }`}
                                 onClick={() => setLoginMethod("sms_otp")}
                             >
                                 <Phone size={16} />
@@ -271,17 +269,17 @@ function Login() {
                         {/* Email (shared for password and email OTP) */}
                         {(loginMethod === "password" ||
                             loginMethod === "email_otp") && (
-                            <div className="mb-4">
-                                <input
-                                    className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400 mb-1"
-                                    id="email"
-                                    type="email"
-                                    placeholder="Enter email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                />
-                            </div>
-                        )}
+                                <div className="mb-4">
+                                    <input
+                                        className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400 mb-1"
+                                        id="email"
+                                        type="email"
+                                        placeholder="Enter email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                    />
+                                </div>
+                            )}
 
                         {/* Password login */}
                         {loginMethod === "password" && (
