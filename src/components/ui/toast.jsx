@@ -1,78 +1,55 @@
-import React, {
-    createContext,
-    useCallback,
-    useContext,
-    useState,
-    useEffect,
-} from "react";
+import React, { createContext, useCallback, useContext } from "react";
+import Swal from "sweetalert2";
 
-const ToastContext = createContext(null);
+// Keep a minimal context API so existing imports don’t break, but delegate to SweetAlert2
+const ToastContext = createContext({
+    success: (msg, opts) => {},
+    error: (msg, opts) => {},
+    info: (msg, opts) => {},
+});
 
-let idCounter = 0;
-
-export function ToastProvider({ children, duration = 4000, max = 5 }) {
-    const [toasts, setToasts] = useState([]);
-
-    const remove = useCallback((id) => {
-        setToasts((t) => t.filter((toast) => toast.id !== id));
+export function ToastProvider({ children }) {
+    const success = useCallback((message, opts = {}) => {
+        Swal.fire({
+            icon: "success",
+            title: opts.title || "Success",
+            text: message,
+            timer: opts.duration ?? 2500,
+            showConfirmButton: false,
+            timerProgressBar: true,
+            ...opts,
+        });
     }, []);
 
-    const push = useCallback(
-        (toast) => {
-            setToasts((t) => {
-                const next = [...t, { id: ++idCounter, ...toast }];
-                if (next.length > max) next.shift();
-                return next;
-            });
-        },
-        [max]
+    const error = useCallback((message, opts = {}) => {
+        Swal.fire({
+            icon: "error",
+            title: opts.title || "Error",
+            text: message,
+            timer: opts.sticky ? undefined : opts.duration ?? 3000,
+            showConfirmButton: !opts.sticky,
+            ...opts,
+        });
+    }, []);
+
+    const info = useCallback((message, opts = {}) => {
+        Swal.fire({
+            icon: "info",
+            title: opts.title || "Info",
+            text: message,
+            timer: opts.duration ?? 2500,
+            showConfirmButton: false,
+            timerProgressBar: true,
+            ...opts,
+        });
+    }, []);
+
+    const value = React.useMemo(
+        () => ({ success, error, info }),
+        [success, error, info]
     );
-
-    useEffect(() => {
-        if (!toasts.length) return;
-        const timers = toasts.map((toast) =>
-            setTimeout(() => remove(toast.id), toast.duration || duration)
-        );
-        return () => timers.forEach(clearTimeout);
-    }, [toasts, duration, remove]);
-
     return (
-        <ToastContext.Provider value={{ push, remove }}>
-            {children}
-            <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80">
-                {toasts.map((t) => (
-                    <div
-                        key={t.id}
-                        className={`border shadow-sm rounded-md px-4 py-3 text-sm flex items-start gap-3 bg-white ${
-                            t.type === "error"
-                                ? "border-red-400"
-                                : t.type === "success"
-                                ? "border-green-400"
-                                : "border-gray-300"
-                        }`}
-                    >
-                        <div className="flex-1">
-                            {t.title && (
-                                <p className="font-medium mb-0 leading-snug">
-                                    {t.title}
-                                </p>
-                            )}
-                            {t.message && (
-                                <p className="text-xs text-gray-600 mt-0.5 leading-snug">
-                                    {t.message}
-                                </p>
-                            )}
-                        </div>
-                        <button
-                            onClick={() => remove(t.id)}
-                            className="text-xs text-gray-500 hover:text-gray-800 cursor-pointer"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                ))}
-            </div>
-        </ToastContext.Provider>
+        <ToastContext.Provider value={value}>{children}</ToastContext.Provider>
     );
 }
 
@@ -83,19 +60,8 @@ export function useToast() {
 }
 
 export function useToastApi() {
-    const { push } = useToast();
-    const success = useCallback(
-        (message, opts = {}) => push({ type: "success", message, ...opts }),
-        [push]
-    );
-    const error = useCallback(
-        (message, opts = {}) => push({ type: "error", message, ...opts }),
-        [push]
-    );
-    const info = useCallback(
-        (message, opts = {}) => push({ type: "info", message, ...opts }),
-        [push]
-    );
+    // Keep the same hook API used throughout the app
+    const { success, error, info } = useToast();
     return React.useMemo(
         () => ({ success, error, info }),
         [success, error, info]
