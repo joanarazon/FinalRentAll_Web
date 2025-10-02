@@ -24,6 +24,7 @@ export default function OwnerBookingRequests({
     const toast = useToastApi();
     const [rows, setRows] = useState([]);
     const [awaiting, setAwaiting] = useState([]);
+    const [expired, setExpired] = useState([]);
     const [loading, setLoading] = useState(false);
     const [actionId, setActionId] = useState(null);
 
@@ -41,6 +42,7 @@ export default function OwnerBookingRequests({
                 .eq("items.user_id", user.id)
                 .eq("status", "pending")
                 .neq("renter_id", user.id)
+                .order("created_at", { ascending: true })
                 .order("start_date", { ascending: true });
             if (error) throw error;
             const filtered = (data || []).filter(
@@ -61,6 +63,21 @@ export default function OwnerBookingRequests({
                 .order("renter_return_marked_at", { ascending: true });
             if (e2) throw e2;
             setAwaiting(ret || []);
+
+            // Fetch expired (auto-expired or manually expired) requests for this owner
+            const { data: exp, error: e3 } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,
+                     items!inner(title,user_id,main_image_url),
+                     renter:renter_id ( first_name,last_name )`
+                )
+                .eq("items.user_id", user.id)
+                .eq("status", "expired")
+                .neq("renter_id", user.id)
+                .order("start_date", { ascending: false });
+            if (e3) throw e3;
+            setExpired(exp || []);
         } catch (e) {
             console.error("Load owner requests failed:", e.message);
         } finally {
@@ -482,6 +499,72 @@ export default function OwnerBookingRequests({
                                                     )}
                                                 </Button>
                                             </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+
+                <h2 className="text-xl font-semibold mt-8 mb-2">Expired</h2>
+                <div className="bg-white rounded-lg shadow-sm border p-4">
+                    {loading ? (
+                        <div className="text-sm text-gray-600">Loading…</div>
+                    ) : expired.length === 0 ? (
+                        <div className="text-sm text-gray-600">
+                            No expired requests.
+                        </div>
+                    ) : (
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b bg-gray-50">
+                                    <th className="p-2">Item</th>
+                                    <th className="p-2">Renter</th>
+                                    <th className="p-2">Dates</th>
+                                    <th className="p-2">Total</th>
+                                    <th className="p-2">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {expired.map((r) => (
+                                    <tr key={r.rental_id} className="border-b">
+                                        <td className="p-2 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <ImagePreviewThumb
+                                                    src={
+                                                        r.items?.main_image_url
+                                                    }
+                                                    alt={r.items?.title}
+                                                    size={40}
+                                                />
+                                                <span>
+                                                    {r.items?.title ||
+                                                        r.item_id}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {r.renter?.first_name}{" "}
+                                            {r.renter?.last_name}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            {new Date(
+                                                r.start_date
+                                            ).toLocaleDateString()}{" "}
+                                            —{" "}
+                                            {new Date(
+                                                r.end_date
+                                            ).toLocaleDateString()}
+                                        </td>
+                                        <td className="p-2 text-sm">
+                                            ₱
+                                            {Number(r.total_cost || 0).toFixed(
+                                                2
+                                            )}
+                                        </td>
+                                        <td className="p-2 text-sm capitalize">
+                                            {r.status}
                                         </td>
                                     </tr>
                                 ))}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import TopMenu from "@/components/topMenu";
 import { useUser } from "@/hooks/useUser";
 import { supabase } from "../../supabaseClient";
@@ -23,7 +24,10 @@ export default function MyBookings() {
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState([]);
     const [search, setSearch] = useState("");
+    const [categoryFilter, setCategoryFilter] = useState("");
+    const [categories, setCategories] = useState([]); // {category_id, name}
     const toast = useToastApi();
+    const navigate = useNavigate();
 
     useEffect(() => {
         if (!user?.id) return;
@@ -39,6 +43,7 @@ export default function MyBookings() {
                            title,
                            main_image_url,
                            user_id,
+                           category_id,
                            owner:users ( first_name, last_name )
                          )`
                     )
@@ -46,6 +51,16 @@ export default function MyBookings() {
                     .order("created_at", { ascending: false });
                 if (error) throw error;
                 setRows(data || []);
+                // Load categories (once) if not yet loaded
+                try {
+                    const { data: cats } = await supabase
+                        .from("categories")
+                        .select("category_id,name")
+                        .order("name", { ascending: true });
+                    setCategories(cats || []);
+                } catch {
+                    /* ignore */
+                }
             } finally {
                 setLoading(false);
             }
@@ -53,22 +68,33 @@ export default function MyBookings() {
     }, [user?.id]);
 
     const grouped = useMemo(() => {
-        const by = { pending: [], ongoing: [], completed: [] };
+        const by = { pending: [], ongoing: [], completed: [], expired: [] };
         for (const r of rows) {
-            if (r.status === "completed") by.completed.push(r);
-            else if (r.status === "pending") by.pending.push(r);
+            const st = String(r.status || "");
+            if (st === "completed") by.completed.push(r);
+            else if (st === "expired") by.expired.push(r);
+            else if (st === "pending") by.pending.push(r);
             else by.ongoing.push(r); // includes confirmed, ongoing, cancelled? keep it simple
         }
         const term = search.trim().toLowerCase();
-        if (!term) return by;
+        const activeCategory = (categoryFilter || "").trim();
         const filter = (arr) =>
-            arr.filter((r) => r.items?.title?.toLowerCase().includes(term));
+            arr.filter((r) => {
+                const titleOk = term
+                    ? r.items?.title?.toLowerCase().includes(term)
+                    : true;
+                const catOk = activeCategory
+                    ? String(r.items?.category_id || "") === activeCategory
+                    : true;
+                return titleOk && catOk;
+            });
         return {
             pending: filter(by.pending),
             ongoing: filter(by.ongoing),
             completed: filter(by.completed),
+            expired: filter(by.expired),
         };
-    }, [rows, search]);
+    }, [rows, search, categoryFilter]);
 
     if (!user) return null;
 
@@ -80,58 +106,126 @@ export default function MyBookings() {
                 setSearchTerm={setSearch}
             />
             <div className="max-w-5xl mx-auto p-4 space-y-6">
-                <h2 className="text-2xl font-semibold">My Bookings</h2>
+                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+                    <h2 className="text-2xl font-semibold">My Bookings</h2>
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600">
+                            Category
+                        </label>
+                        <select
+                            className="border rounded px-2 py-1 text-sm bg-white"
+                            value={categoryFilter}
+                            onChange={(e) => setCategoryFilter(e.target.value)}
+                        >
+                            <option value="">All</option>
+                            {categories.map((c) => (
+                                <option
+                                    key={c.category_id}
+                                    value={String(c.category_id)}
+                                >
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+                        {categoryFilter && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="cursor-pointer"
+                                onClick={() => setCategoryFilter("")}
+                            >
+                                Clear
+                            </Button>
+                        )}
+                    </div>
+                </div>
                 {/* {loading ? (
                     <Loading />
                 ) : ( */}
-                    <div className="space-y-6">
-                        <Section
-                            title="Pending"
-                            data={grouped.pending}
-                            user={user}
-                        />
-                        <Separator />
-                        <Section
-                            title="Ongoing"
-                            data={grouped.ongoing}
-                            user={user}
-                            onChanged={() => {
-                                // refetch to reflect updates
-                                (async () => {
-                                    try {
-                                        setLoading(true);
-                                        const { data, error } = await supabase
-                                            .from("rental_transactions")
-                                            .select(
-                                                `rental_id,item_id,start_date,end_date,total_cost,status,
+                <div className="space-y-6">
+                    <Section
+                        title="Pending"
+                        data={grouped.pending}
+                        user={user}
+                        onChanged={() => {
+                            // refetch to reflect updates
+                            (async () => {
+                                try {
+                                    setLoading(true);
+                                    const { data, error } = await supabase
+                                        .from("rental_transactions")
+                                        .select(
+                                            `rental_id,item_id,start_date,end_date,total_cost,status,
+                                             renter:renter_id ( first_name, last_name ),
+                                             items (
+                                               title,
+                                               main_image_url,
+                                               user_id,
+                                               category_id,
+                                               owner:users ( first_name, last_name )
+                                             )`
+                                        )
+                                        .eq("renter_id", user.id)
+                                        .order("created_at", {
+                                            ascending: false,
+                                        });
+                                    if (error) throw error;
+                                    setRows(data || []);
+                                } finally {
+                                    setLoading(false);
+                                }
+                            })();
+                        }}
+                    />
+                    <Separator />
+                    <Section
+                        title="Ongoing"
+                        data={grouped.ongoing}
+                        user={user}
+                        onChanged={() => {
+                            // refetch to reflect updates
+                            (async () => {
+                                try {
+                                    setLoading(true);
+                                    const { data, error } = await supabase
+                                        .from("rental_transactions")
+                                        .select(
+                                            `rental_id,item_id,start_date,end_date,total_cost,status,
                                                                                                  renter:renter_id ( first_name, last_name ),
                                                                                                  items (
                                                                                                      title,
                                                                                                      main_image_url,
                                                                                                      user_id,
+                                                                                                     category_id,
                                                                                                      owner:users ( first_name, last_name )
                                                                                                  )`
-                                            )
-                                            .eq("renter_id", user.id)
-                                            .order("created_at", {
-                                                ascending: false,
-                                            });
-                                        if (error) throw error;
-                                        setRows(data || []);
-                                    } finally {
-                                        setLoading(false);
-                                    }
-                                })();
-                            }}
-                        />
-                        <Separator />
-                        <Section
-                            title="Completed"
-                            data={grouped.completed}
-                            user={user}
-                        />
-                    </div>
-                    {/* )} */}
+                                        )
+                                        .eq("renter_id", user.id)
+                                        .order("created_at", {
+                                            ascending: false,
+                                        });
+                                    if (error) throw error;
+                                    setRows(data || []);
+                                } finally {
+                                    setLoading(false);
+                                }
+                            })();
+                        }}
+                    />
+                    <Separator />
+                    <Section
+                        title="Completed"
+                        data={grouped.completed}
+                        user={user}
+                    />
+                    <Separator />
+                    <Section
+                        title="Expired"
+                        data={grouped.expired}
+                        user={user}
+                    />
+                </div>
+                {/* )} */}
             </div>
         </div>
     );
@@ -206,7 +300,14 @@ function Section({ title, data, onChanged, user }) {
                                     </span>
                                 </div>
                                 <div className="pt-2 flex gap-2 flex-wrap">
-                                    <DetailsModal rental={r} />
+                                    <DetailsModal rental={r} user={user} />
+                                    {title === "Pending" && (
+                                        <CancelBooking
+                                            rental={r}
+                                            onChanged={onChanged}
+                                            user={user}
+                                        />
+                                    )}
                                     {title === "Ongoing" &&
                                         isEligibleReturn(r) && (
                                             <MarkReturned
@@ -240,6 +341,45 @@ function Section({ title, data, onChanged, user }) {
                 </div>
             )}
         </div>
+    );
+}
+
+function CancelBooking({ rental, onChanged, user }) {
+    const [submitting, setSubmitting] = useState(false);
+    const toast = useToastApi();
+    const doCancel = async () => {
+        if (!rental?.rental_id) return;
+        const ok = confirm(
+            "Cancel this booking request? This cannot be undone."
+        );
+        if (!ok) return;
+        try {
+            setSubmitting(true);
+            const { error } = await supabase
+                .from("rental_transactions")
+                .update({ status: "cancelled" })
+                .eq("rental_id", rental.rental_id)
+                .eq("renter_id", user?.id)
+                .eq("status", "pending");
+            if (error) throw error;
+            toast.success("Booking cancelled");
+            onChanged && onChanged();
+        } catch (e) {
+            toast.error(e.message || "Could not cancel booking");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+    return (
+        <Button
+            size="sm"
+            variant="outline"
+            className="cursor-pointer"
+            disabled={submitting}
+            onClick={doCancel}
+        >
+            {submitting ? "Cancelling…" : "Cancel"}
+        </Button>
     );
 }
 
@@ -429,9 +569,48 @@ function ImagePreviewThumb({ src, alt }) {
     );
 }
 
-function DetailsModal({ rental }) {
+function DetailsModal({ rental, user }) {
+    const [open, setOpen] = useState(false);
+    const [unitsCount, setUnitsCount] = useState(null);
+    const [countLoading, setCountLoading] = useState(false);
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (!open) return;
+        let canceled = false;
+        (async () => {
+            try {
+                setCountLoading(true);
+                const { count, error } = await supabase
+                    .from("rental_transactions")
+                    .select("*", { count: "exact", head: true })
+                    .eq("item_id", rental.item_id)
+                    .eq("renter_id", user?.id)
+                    .eq("start_date", rental.start_date)
+                    .eq("end_date", rental.end_date)
+                    .eq("status", rental.status);
+                if (error) throw error;
+                if (!canceled) setUnitsCount(Number(count || 0));
+            } catch (e) {
+                if (!canceled) setUnitsCount(1);
+            } finally {
+                if (!canceled) setCountLoading(false);
+            }
+        })();
+        return () => {
+            canceled = true;
+        };
+    }, [
+        open,
+        rental.item_id,
+        rental.start_date,
+        rental.end_date,
+        rental.status,
+        user?.id,
+    ]);
+
     return (
-        <Dialog>
+        <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button size="sm" variant="outline" className="cursor-pointer">
                     View Details
@@ -480,13 +659,33 @@ function DetailsModal({ rental }) {
                             ₱{Number(rental.total_cost || 0).toFixed(2)}
                         </span>
                     </div>
+                    <div className="flex justify-between">
+                        <span>Units involved</span>
+                        <span>
+                            {countLoading ? "Loading…" : unitsCount ?? "—"}
+                        </span>
+                    </div>
                 </div>
-                <DialogFooter>
-                    <DialogTrigger asChild>
-                        <Button variant="outline" className="cursor-pointer">
-                            Close
-                        </Button>
-                    </DialogTrigger>
+                <DialogFooter className="flex items-center justify-between">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="cursor-pointer"
+                        onClick={() => {
+                            const ownerId = rental?.items?.user_id;
+                            if (ownerId) navigate(`/profile/${ownerId}`);
+                        }}
+                    >
+                        View Owner Profile
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="cursor-pointer"
+                        onClick={() => setOpen(false)}
+                    >
+                        Close
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
