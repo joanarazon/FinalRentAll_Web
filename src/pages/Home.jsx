@@ -117,36 +117,75 @@ function Home() {
                 (data || []).map(async (it) => {
                     // Fetch image and today's overlapping bookings in parallel
                     const imagePromise = getImageUrl(it.user_id, it.item_id);
-                    const overlapPromise = (async () => {
+                    const availabilityPromise = (async () => {
                         try {
-                            const { count } = await supabase
-                                .from("rental_transactions")
-                                .select("*", { count: "exact", head: true })
-                                .eq("item_id", it.item_id)
-                                .in("status", [
-                                    "confirmed",
-                                    "ongoing",
-                                    "awaiting_owner_confirmation",
-                                ])
-                                .lte("start_date", todayStr)
-                                .gte("end_date", todayStr);
-                            return Number(count || 0);
+                            // Sum of quantities that consume capacity today (align with DB capacity trigger)
+                            const consumingStatuses = [
+                                "confirmed",
+                                "deposit_submitted",
+                                "on_the_way",
+                                "ongoing",
+                                "awaiting_owner_confirmation",
+                            ];
+                            const departedStatuses = [
+                                "on_the_way",
+                                "ongoing",
+                                "awaiting_owner_confirmation",
+                            ];
+
+                            const [
+                                { data: consumeRows, error: cErr },
+                                { data: departedRows, error: dErr },
+                            ] = await Promise.all([
+                                supabase
+                                    .from("rental_transactions")
+                                    .select("quantity")
+                                    .eq("item_id", it.item_id)
+                                    .in("status", consumingStatuses)
+                                    .lte("start_date", todayStr)
+                                    .gte("end_date", todayStr),
+                                supabase
+                                    .from("rental_transactions")
+                                    .select("quantity")
+                                    .eq("item_id", it.item_id)
+                                    .in("status", departedStatuses)
+                                    .lte("start_date", todayStr)
+                                    .gte("end_date", todayStr),
+                            ]);
+
+                            if (cErr) throw cErr;
+                            if (dErr) throw dErr;
+
+                            const sum = (rows) =>
+                                (rows || []).reduce(
+                                    (acc, r) => acc + (Number(r.quantity) || 1),
+                                    0
+                                );
+                            const consumeSum = sum(consumeRows);
+                            const departedSum = sum(departedRows);
+
+                            // Base capacity is DB items.quantity plus what is currently out (since DB already subtracted it)
+                            const baseCapacity =
+                                (Number(it.quantity) || 0) + departedSum;
+                            const remaining = Math.max(
+                                0,
+                                baseCapacity - consumeSum
+                            );
+                            return remaining;
                         } catch (e) {
                             console.warn(
-                                "overlap count failed for item",
+                                "availability calc failed for item",
                                 it.item_id,
                                 e?.message || e
                             );
-                            return 0;
+                            // fallback: show DB quantity as-is
+                            return Number(it.quantity) || 0;
                         }
                     })();
-                    const [imageUrl, overlaps] = await Promise.all([
+                    const [imageUrl, remainingUnits] = await Promise.all([
                         imagePromise,
-                        overlapPromise,
+                        availabilityPromise,
                     ]);
-
-                    const totalQty = Number(it.quantity) || 1;
-                    const remainingUnits = Math.max(0, totalQty - overlaps);
 
                     return {
                         ownerId: it.user_id,
