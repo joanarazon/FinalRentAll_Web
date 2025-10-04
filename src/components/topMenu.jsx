@@ -7,10 +7,12 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useUser } from "../hooks/useUser";
-import { Heart, Menu, Search } from "lucide-react";
+import { Heart, Menu, Search, Bell } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUserContext } from "../context/UserContext.jsx";
+import { useNotifications } from "../context/NotificationContext.jsx";
+import { Badge } from "./ui/badge";
 import { supabase } from "../../supabaseClient";
 
 export default function TopMenu({
@@ -27,6 +29,7 @@ export default function TopMenu({
     const [favoritesCount, setFavoritesCount] = useState(0);
     const navigate = useNavigate();
     const { logout } = useUserContext();
+    const { unreadCount } = useNotifications();
 
     const handleInbox = () => {
         navigate("/inbox");
@@ -186,10 +189,19 @@ export default function TopMenu({
                         variant="link"
                         className={`${linkClass(
                             "notifications"
-                        )} cursor-pointer`}
+                        )} cursor-pointer relative`}
                         onClick={handleNotification}
                     >
+                        <Bell className="h-4 w-4 mr-2" />
                         Notifications
+                        {unreadCount > 0 && (
+                            <Badge
+                                variant="destructive"
+                                className="absolute -top-1 -right-1 text-xs min-w-[1.25rem] h-5 px-1"
+                            >
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                            </Badge>
+                        )}
                     </Button>
                 </div>
 
@@ -245,10 +257,19 @@ export default function TopMenu({
                         variant="link"
                         className={`${linkClass(
                             "notifications"
-                        )} cursor-pointer`}
+                        )} cursor-pointer relative`}
                         onClick={handleNotification}
                     >
+                        <Bell className="h-4 w-4 mr-2" />
                         Notifications
+                        {unreadCount > 0 && (
+                            <Badge
+                                variant="destructive"
+                                className="absolute -top-1 -right-1 text-xs min-w-[1.25rem] h-5 px-1"
+                            >
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                            </Badge>
+                        )}
                     </Button>
                 </div>
             )}

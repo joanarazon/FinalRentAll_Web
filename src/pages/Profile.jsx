@@ -141,6 +141,9 @@ export default function Profile() {
         if (!profileUserId) return;
         setLoadingItems(true);
         try {
+            // Filter items based on approval status
+            // - Hide rejected items from all viewers
+            // - Show pending and approved items (with different UI treatment)
             const query = supabase
                 .from("items")
                 .select(
@@ -148,6 +151,7 @@ export default function Profile() {
                 )
                 .eq("user_id", profileUserId)
                 .eq("available", true)
+                .not("item_status", "eq", "rejected") // Hide rejected items
                 .order("created_at", { ascending: false });
             let { data, error } = await query;
             if (
@@ -166,8 +170,15 @@ export default function Profile() {
                 error = fallback.error;
             }
             if (error) throw error;
+            // Filter out rejected items in case of fallback query (when item_status column doesn't exist)
+            const filteredData = (data || []).filter((item) => {
+                // If item_status doesn't exist, assume it's approved (legacy items)
+                // If item_status exists, exclude rejected items
+                return !item.item_status || item.item_status !== "rejected";
+            });
+
             const withImages = await Promise.all(
-                (data || []).map(async (it) => ({
+                filteredData.map(async (it) => ({
                     ...it,
                     imageUrl:
                         it.main_image_url ||
@@ -564,9 +575,16 @@ function OwnedItemsGrid({ items, isOwner, onChanged, onRent }) {
                     <div className="p-4">
                         <div className="flex items-start justify-between gap-2 mb-3">
                             <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-[#1E1E1E] text-lg line-clamp-1 mb-1">
-                                    {it.title}
-                                </h3>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-semibold text-[#1E1E1E] text-lg line-clamp-1">
+                                        {it.title}
+                                    </h3>
+                                    {it.item_status === "pending" && (
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                            Under Review
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="flex items-baseline gap-1">
                                     <span className="text-2xl font-bold text-[#FFAB00]">
                                         ₱
@@ -602,10 +620,21 @@ function OwnedItemsGrid({ items, isOwner, onChanged, onRent }) {
                         </div>
                         {!isOwner && (
                             <Button
-                                className="w-full bg-[#FFAB00] hover:bg-[#FFAB00]/90 text-[#1E1E1E] font-medium cursor-pointer transition-all"
-                                onClick={() => onRent?.(it)}
+                                className={`w-full font-medium transition-all ${
+                                    it.item_status === "pending"
+                                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                        : "bg-[#FFAB00] hover:bg-[#FFAB00]/90 text-[#1E1E1E] cursor-pointer"
+                                }`}
+                                onClick={() => {
+                                    if (it.item_status !== "pending") {
+                                        onRent?.(it);
+                                    }
+                                }}
+                                disabled={it.item_status === "pending"}
                             >
-                                Rent Now
+                                {it.item_status === "pending"
+                                    ? "Under Review"
+                                    : "Rent Now"}
                             </Button>
                         )}
                     </div>

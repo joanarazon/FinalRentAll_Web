@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "../../supabaseClient";
 import { getLessorRatingStats } from "@/lib/reviews";
 import ReportDialog from "@/components/ReportDialog";
+import { handleBookingCreated } from "../lib/notificationEvents";
 
 export default function BookItemModal({
     open,
@@ -170,24 +171,72 @@ export default function BookItemModal({
                 const toStr = `${to.getFullYear()}-${String(
                     to.getMonth() + 1
                 ).padStart(2, "0")}-${String(to.getDate()).padStart(2, "0")}`;
-                const { data, error } = await supabase
-                    .from("rental_transactions")
-                    .select("quantity")
-                    .eq("item_id", item.item_id)
-                    .in("status", [
-                        "confirmed",
-                        "deposit_submitted",
-                        "on_the_way",
-                        "ongoing",
-                        "awaiting_owner_confirmation",
-                    ])
-                    .lte("start_date", toStr)
-                    .gte("end_date", fromStr);
-                if (error) throw error;
-                const booked = Array.isArray(data)
-                    ? data.reduce((s, r) => s + Number(r.quantity || 0), 0)
-                    : 0;
-                const rem = Math.max(0, (Number(quantity) || 1) - booked);
+                // Use the same logic as Home.jsx but for date range instead of today
+                const consumingStatuses = [
+                    "confirmed",
+                    "deposit_submitted",
+                    "on_the_way",
+                    "ongoing",
+                    "awaiting_owner_confirmation",
+                ];
+                const departedStatuses = [
+                    "on_the_way",
+                    "ongoing",
+                    "awaiting_owner_confirmation",
+                ];
+
+                // Check for any overlap with selected date range
+                // A booking overlaps if: booking_start <= selected_end AND booking_end >= selected_start
+                const [
+                    { data: consumeRows, error: cErr },
+                    { data: departedRows, error: dErr },
+                ] = await Promise.all([
+                    supabase
+                        .from("rental_transactions")
+                        .select("quantity, start_date, end_date, status")
+                        .eq("item_id", item.item_id)
+                        .in("status", consumingStatuses)
+                        .lte("start_date", toStr)
+                        .gte("end_date", fromStr),
+                    supabase
+                        .from("rental_transactions")
+                        .select("quantity, start_date, end_date, status")
+                        .eq("item_id", item.item_id)
+                        .in("status", departedStatuses)
+                        .lte("start_date", toStr)
+                        .gte("end_date", fromStr),
+                ]);
+
+                if (cErr) throw cErr;
+                if (dErr) throw dErr;
+
+                // Debug logging
+                console.log(
+                    "BookItemModal availability check for item:",
+                    item.item_id
+                );
+                console.log("Selected date range:", fromStr, "to", toStr);
+                console.log("Total item quantity:", quantity);
+                console.log("Consuming bookings (overlapping):", consumeRows);
+                console.log("Departed bookings (overlapping):", departedRows);
+
+                const sum = (rows) =>
+                    (rows || []).reduce(
+                        (acc, r) => acc + (Number(r.quantity) || 1),
+                        0
+                    );
+                const consumeSum = sum(consumeRows);
+                const departedSum = sum(departedRows);
+
+                console.log("Consume sum:", consumeSum);
+                console.log("Departed sum:", departedSum);
+
+                const baseCapacity = (Number(quantity) || 0) + departedSum;
+                const rem = Math.max(0, baseCapacity - consumeSum);
+
+                console.log("Base capacity:", baseCapacity);
+                console.log("BookItemModal remaining units:", rem);
+
                 setRemaining(rem);
                 setRequestedUnits((prev) =>
                     Math.min(Math.max(1, prev || 1), rem || 1)
@@ -330,15 +379,48 @@ export default function BookItemModal({
                 quantity: unitsToBook,
                 total_cost,
             };
-            const { error } = await supabase
+            const { data: insertedBooking, error } = await supabase
                 .from("rental_transactions")
-                .insert(row);
+                .insert(row)
+                .select(
+                    `
+                    *,
+                    items!inner(title, user_id),
+                    renter:renter_id(first_name, last_name)
+                `
+                )
+                .single();
             if (error) {
                 setErrorMsg(
                     "Booking could not be created. The selected dates may be fully booked."
                 );
                 throw error;
             }
+
+            // Trigger notification to owner
+            try {
+                const renterName = insertedBooking.renter
+                    ? `${insertedBooking.renter.first_name || ""} ${
+                          insertedBooking.renter.last_name || ""
+                      }`.trim()
+                    : "Unknown User";
+
+                await handleBookingCreated(
+                    {
+                        ...insertedBooking,
+                        owner_id: insertedBooking.items.user_id,
+                    },
+                    insertedBooking.items.title,
+                    renterName
+                );
+            } catch (notificationError) {
+                console.error(
+                    "Failed to send booking notification:",
+                    notificationError
+                );
+                // Don't fail the booking if notification fails
+            }
+
             onBooked?.();
             onOpenChange(false);
         } catch (e) {
