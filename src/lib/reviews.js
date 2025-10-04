@@ -253,7 +253,10 @@ export async function canRateItem(rentalId, reviewerId) {
     }
     const { data: rental, error } = await supabase
         .from("rental_transactions")
-        .select("rental_id, renter_id, status, item_id")
+        .select(
+            `rental_id, renter_id, status, item_id,
+       items!inner(user_id)`
+        )
         .eq("rental_id", rentalId)
         .single();
     if (error) {
@@ -266,7 +269,11 @@ export async function canRateItem(rentalId, reviewerId) {
         return { canRate: false, reason: "Only renter can rate item" };
     if (!rental.item_id)
         return { canRate: false, reason: "Item not found for rental" };
-    return { canRate: true, itemId: rental.item_id, rental };
+    const revieweeId = rental.items?.user_id || null;
+    if (!revieweeId) {
+        return { canRate: false, reason: "Unable to determine item owner" };
+    }
+    return { canRate: true, itemId: rental.item_id, revieweeId, rental };
 }
 
 /**
@@ -298,7 +305,10 @@ export async function saveItemReview({
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
         throw new Error("Rating must be an integer between 1 and 5");
     }
-    const { canRate, reason, itemId } = await canRateItem(rentalId, reviewerId);
+    const { canRate, reason, itemId, revieweeId } = await canRateItem(
+        rentalId,
+        reviewerId
+    );
     if (!canRate) throw new Error(reason || "Not allowed to rate this item");
 
     const existing = await getExistingItemReview(rentalId, reviewerId);
@@ -319,6 +329,7 @@ export async function saveItemReview({
             rental_id: rentalId,
             item_id: itemId,
             reviewer_id: reviewerId,
+            reviewee_id: revieweeId,
             rating,
             comment: comment || null,
         })
