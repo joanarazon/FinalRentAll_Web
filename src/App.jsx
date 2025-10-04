@@ -26,6 +26,7 @@ import NotAuthorized from "./pages/NotAuthorized.jsx";
 import MyBookings from "./pages/MyBookings";
 import MyRatings from "./pages/MyRatings";
 import Profile from "./pages/Profile";
+import Favorites from "./pages/Favorites.jsx";
 import { useUserContext } from "./context/UserContext.jsx";
 import Loading from "./components/Loading.jsx";
 import PendingVerification from "./pages/PendingVerification.jsx";
@@ -48,9 +49,8 @@ function RoleAwareLanding() {
 }
 
 export default function App() {
-    useEffect(() => {
-        generateToken();
-    }, [])
+    // Avoid prompting for Notifications automatically on load.
+    // If needed, call requestNotificationsAndToken() from a user action.
 
     return (
         <Router>
@@ -75,10 +75,7 @@ export default function App() {
                     <Route path="/home" element={<Home />} />
                     <Route path="/inbox" element={<Inbox />} />
                     <Route path="/chat" element={<Chat />} />
-                    <Route
-                        path="/notifications"
-                        element={<Notification />}
-                    />
+                    <Route path="/notifications" element={<Notification />} />
                     <Route
                         path="/booking-requests"
                         element={<OwnerBookingRequests />}
@@ -87,6 +84,7 @@ export default function App() {
                     <Route path="/my-ratings" element={<MyRatings />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/profile/:id" element={<Profile />} />
+                    <Route path="/favorites" element={<Favorites />} />
                 </Route>
                 {/* Admin group */}
                 <Route
@@ -99,26 +97,14 @@ export default function App() {
                     }
                 >
                     <Route path="/adminhome" element={<AdminHome />} />
-                    <Route
-                        path="/pending-users"
-                        element={<PendingUser />}
-                    />
-                    <Route
-                        path="/pending-items"
-                        element={<PendingItems />}
-                    />
+                    <Route path="/pending-users" element={<PendingUser />} />
+                    <Route path="/pending-items" element={<PendingItems />} />
                     <Route
                         path="/renting-history"
                         element={<ViewRentingHistory />}
                     />
-                    <Route
-                        path="/reported-users"
-                        element={<ReportedUsers />}
-                    />
-                    <Route
-                        path="/reported-items"
-                        element={<ReportedItems />}
-                    />
+                    <Route path="/reported-users" element={<ReportedUsers />} />
+                    <Route path="/reported-items" element={<ReportedItems />} />
                 </Route>
                 {/** Pending Bookings route hidden per product change (handled by lessors) **/}
             </Routes>

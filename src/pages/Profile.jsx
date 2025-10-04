@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+"use client";
+
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useUserContext } from "@/context/UserContext.jsx";
 import { supabase } from "../../supabaseClient";
 import { useToastApi } from "@/components/ui/toast";
@@ -12,11 +14,14 @@ import {
     Plus,
     Minus,
     Trash2,
-    ExternalLink,
+    ChevronLeft,
+    Calendar,
+    Phone,
+    Star,
+    MapPin,
 } from "lucide-react";
 import TopMenu from "@/components/topMenu";
-import { ChevronLeft } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { getLessorRatingStats } from "@/lib/reviews";
 import BookItemModal from "@/components/BookItemModal";
 import ReportDialog from "@/components/ReportDialog";
@@ -44,6 +49,8 @@ export default function Profile() {
     const [loadingItems, setLoadingItems] = useState(false);
     const [rating, setRating] = useState({ average: 0, count: 0 });
     const [loadingRating, setLoadingRating] = useState(true);
+    const [reviews, setReviews] = useState([]);
+    const [loadingReviews, setLoadingReviews] = useState(true);
     const [uploading, setUploading] = useState(false);
     const [rentOpen, setRentOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
@@ -134,7 +141,7 @@ export default function Profile() {
         if (!profileUserId) return;
         setLoadingItems(true);
         try {
-            let query = supabase
+            const query = supabase
                 .from("items")
                 .select(
                     "item_id,user_id,title,description,price_per_day,deposit_fee,location,available,created_at,item_status,quantity,main_image_url"
@@ -191,6 +198,25 @@ export default function Profile() {
                 setLoadingRating(false);
             }
         })();
+        (async () => {
+            try {
+                setLoadingReviews(true);
+                const { data, error } = await supabase
+                    .from("lessor_reviews")
+                    .select(
+                        `review_id,rating,comment,created_at, reviewer:reviewer_id(first_name,last_name,profile_pic_url)`
+                    )
+                    .eq("lessor_id", profileUserId)
+                    .order("created_at", { ascending: false });
+                if (error) throw error;
+                setReviews(data || []);
+            } catch (e) {
+                console.warn("Load reviews failed", e?.message || e);
+                setReviews([]);
+            } finally {
+                setLoadingReviews(false);
+            }
+        })();
     }, [profileUserId, loadProfile, loadItems]);
 
     const onRent = useCallback((item) => {
@@ -200,14 +226,14 @@ export default function Profile() {
     }, []);
 
     return (
-        <div className="min-h-screen bg-[#FFFBF2]">
+        <div className="min-h-screen bg-[#FAF5EF]">
             <TopMenu
                 activePage="profile"
                 searchTerm={search}
                 setSearchTerm={setSearch}
             />
-            <div className="max-w-5xl mx-auto p-4">
-                <div className="flex items-center gap-2 mb-4">
+            <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+                <div className="mb-6">
                     <Button
                         variant="ghost"
                         onClick={() =>
@@ -215,148 +241,184 @@ export default function Profile() {
                                 ? navigate(-1)
                                 : navigate("/home")
                         }
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 hover:bg-[#1E1E1E]/5 transition-colors"
                     >
-                        <ChevronLeft className="h-4 w-4" />
-                        Back
+                        <ChevronLeft className="h-5 w-5" />
+                        <span className="font-medium">Back</span>
                     </Button>
                 </div>
-                <h1 className="text-2xl font-semibold mb-4">Profile</h1>
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="relative h-16 w-16">
-                        {loadingProfile ? (
-                            <Skeleton className="h-16 w-16 rounded-full" />
-                        ) : (
-                            <Avatar className="h-16 w-16">
-                                <AvatarImage
-                                    src={profile?.profile_pic_url || ""}
-                                    alt="Profile"
-                                />
-                                <AvatarFallback>{initials}</AvatarFallback>
-                            </Avatar>
-                        )}
-                        {isOwnProfile && !loadingProfile && (
-                            <>
-                                <input
-                                    id="face-upload-input"
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={onUploadFace}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        document
-                                            .getElementById("face-upload-input")
-                                            ?.click()
-                                    }
-                                    className="absolute -bottom-1 -right-1 bg-black/80 hover:bg-black text-white rounded-full p-1 shadow-md"
-                                    title={
-                                        uploading
-                                            ? "Uploading..."
-                                            : "Change photo"
-                                    }
-                                    disabled={uploading}
-                                >
-                                    <Camera className="h-4 w-4" />
-                                </button>
-                            </>
-                        )}
-                    </div>
-                    <div>
-                        {loadingProfile ? (
-                            <>
-                                <Skeleton className="h-5 w-48 mb-2" />
-                                <Skeleton className="h-4 w-40 mb-1" />
-                                <Skeleton className="h-4 w-28" />
-                                <Skeleton className="h-4 w-56 mt-2" />
-                            </>
-                        ) : (
-                            <>
-                                <p className="text-lg font-medium">
-                                    {(profile?.first_name || "").trim()}{" "}
-                                    {(profile?.last_name || "").trim()}
-                                </p>
-                                <p className="text-sm text-gray-600">
-                                    Member since{" "}
-                                    {profile?.created_at
-                                        ? new Date(
-                                              profile.created_at
-                                          ).toLocaleDateString()
-                                        : "—"}
-                                </p>
-                                {profile?.phone && (
-                                    <p className="text-sm text-gray-600">
-                                        📞 {profile.phone}
-                                    </p>
-                                )}
-                                <p className="text-sm text-gray-700 mt-1">
-                                    Owner rating:{" "}
-                                    {loadingRating ? (
-                                        <Skeleton className="h-4 w-40 inline-block align-middle" />
-                                    ) : rating.count > 0 ? (
-                                        `${rating.average.toFixed(1)} / 5 (${
-                                            rating.count
-                                        } review${
-                                            rating.count === 1 ? "" : "s"
-                                        })`
-                                    ) : (
-                                        "No reviews yet"
-                                    )}
-                                </p>
-                                {!isOwnProfile && profile?.id && (
-                                    <div className="mt-3 flex flex-wrap gap-2">
-                                        <Button
-                                            variant="outline"
-                                            className="cursor-pointer"
-                                            onClick={() =>
-                                                navigate(
-                                                    `/inbox?to=${profile.id}`
+
+                <div className="bg-white rounded-2xl shadow-sm border border-[#1E1E1E]/10 p-6 sm:p-8 mb-8">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                        <div className="relative">
+                            {loadingProfile ? (
+                                <Skeleton className="h-24 w-24 rounded-full" />
+                            ) : (
+                                <Avatar className="h-24 w-24 ring-4 ring-[#FFAB00]/20">
+                                    <AvatarImage
+                                        src={profile?.profile_pic_url || ""}
+                                        alt="Profile"
+                                    />
+                                    <AvatarFallback className="bg-[#FFAB00] text-[#1E1E1E] text-2xl font-semibold">
+                                        {initials}
+                                    </AvatarFallback>
+                                </Avatar>
+                            )}
+                            {isOwnProfile && !loadingProfile && (
+                                <>
+                                    <input
+                                        id="face-upload-input"
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={onUploadFace}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            document
+                                                .getElementById(
+                                                    "face-upload-input"
                                                 )
-                                            }
-                                        >
-                                            Message Owner
-                                        </Button>
-                                        <ReportDialog
-                                            trigger={
-                                                <Button
-                                                    variant="outline"
-                                                    className="cursor-pointer"
-                                                >
-                                                    Report User
-                                                </Button>
-                                            }
-                                            senderId={authUser?.id || null}
-                                            targetUserId={profile.id}
-                                            targetItemId={null}
-                                            rentalId={null}
-                                            title="Report User"
-                                            description="Describe the issue with this user."
-                                        />
+                                                ?.click()
+                                        }
+                                        className="absolute -bottom-1 -right-1 bg-[#FFAB00] hover:bg-[#FFAB00]/90 text-[#1E1E1E] rounded-full p-2.5 shadow-lg transition-all hover:scale-105"
+                                        title={
+                                            uploading
+                                                ? "Uploading..."
+                                                : "Change photo"
+                                        }
+                                        disabled={uploading}
+                                    >
+                                        <Camera className="h-4 w-4" />
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                        <div className="flex-1">
+                            {loadingProfile ? (
+                                <>
+                                    <Skeleton className="h-8 w-64 mb-3" />
+                                    <Skeleton className="h-5 w-48 mb-2" />
+                                    <Skeleton className="h-5 w-40 mb-2" />
+                                    <Skeleton className="h-5 w-56" />
+                                </>
+                            ) : (
+                                <>
+                                    <h1 className="text-3xl font-bold text-[#1E1E1E] mb-3">
+                                        {(profile?.first_name || "").trim()}{" "}
+                                        {(profile?.last_name || "").trim()}
+                                    </h1>
+                                    <div className="flex flex-wrap gap-4 text-sm text-[#1E1E1E]/70 mb-4">
+                                        <div className="flex items-center gap-1.5">
+                                            <Calendar className="h-4 w-4" />
+                                            <span>
+                                                Member since{" "}
+                                                {profile?.created_at
+                                                    ? new Date(
+                                                          profile.created_at
+                                                      ).toLocaleDateString(
+                                                          "en-US",
+                                                          {
+                                                              month: "short",
+                                                              year: "numeric",
+                                                          }
+                                                      )
+                                                    : "—"}
+                                            </span>
+                                        </div>
+                                        {profile?.phone && (
+                                            <div className="flex items-center gap-1.5">
+                                                <Phone className="h-4 w-4" />
+                                                <span>{profile.phone}</span>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </>
-                        )}
+                                    <div className="flex items-center gap-2 mb-4">
+                                        {loadingRating ? (
+                                            <Skeleton className="h-6 w-48" />
+                                        ) : rating.count > 0 ? (
+                                            <div className="flex items-center gap-2 bg-[#FFAB00]/10 px-3 py-1.5 rounded-full">
+                                                <Star className="h-4 w-4 fill-[#FFAB00] text-[#FFAB00]" />
+                                                <span className="font-semibold text-[#1E1E1E]">
+                                                    {rating.average.toFixed(1)}
+                                                </span>
+                                                <span className="text-sm text-[#1E1E1E]/70">
+                                                    ({rating.count} review
+                                                    {rating.count === 1
+                                                        ? ""
+                                                        : "s"}
+                                                    )
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2 text-sm text-[#1E1E1E]/50">
+                                                <Star className="h-4 w-4" />
+                                                <span>No reviews yet</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {!isOwnProfile && profile?.id && (
+                                        <div className="flex flex-wrap gap-3">
+                                            <Button
+                                                className="bg-[#FFAB00] hover:bg-[#FFAB00]/90 text-[#1E1E1E] font-medium cursor-pointer transition-all hover:scale-105"
+                                                onClick={() =>
+                                                    navigate(
+                                                        `/inbox?to=${profile.id}`
+                                                    )
+                                                }
+                                            >
+                                                Message Owner
+                                            </Button>
+                                            <ReportDialog
+                                                trigger={
+                                                    <Button
+                                                        variant="outline"
+                                                        className="cursor-pointer border-[#1E1E1E]/20 hover:bg-[#1E1E1E]/5 bg-transparent"
+                                                    >
+                                                        Report User
+                                                    </Button>
+                                                }
+                                                senderId={authUser?.id || null}
+                                                targetUserId={profile.id}
+                                                targetItemId={null}
+                                                rentalId={null}
+                                                title="Report User"
+                                                description="Describe the issue with this user."
+                                            />
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
-                <h2 className="text-xl font-semibold mt-6 mb-3">
-                    Open for booking
-                </h2>
+
+                <div className="mb-6">
+                    <h2 className="text-2xl font-bold text-[#1E1E1E]">
+                        Open for booking
+                    </h2>
+                    <p className="text-sm text-[#1E1E1E]/60 mt-1">
+                        {items.length} {items.length === 1 ? "item" : "items"}{" "}
+                        available
+                    </p>
+                </div>
+
                 {loadingItems ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {Array.from({ length: 6 }).map((_, i) => (
                             <div
                                 key={i}
-                                className="border rounded-lg overflow-hidden bg-white"
+                                className="border border-[#1E1E1E]/10 rounded-xl overflow-hidden bg-white"
                             >
-                                <Skeleton className="w-full h-40" />
-                                <div className="p-3">
-                                    <Skeleton className="h-5 w-3/4 mb-2" />
-                                    <Skeleton className="h-4 w-1/3" />
-                                    <div className="mt-3 flex justify-between items-center">
+                                <Skeleton className="w-full h-48" />
+                                <div className="p-4">
+                                    <Skeleton className="h-6 w-3/4 mb-2" />
+                                    <Skeleton className="h-5 w-1/3 mb-3" />
+                                    <Skeleton className="h-4 w-full mb-2" />
+                                    <div className="mt-4 flex justify-between items-center">
                                         <Skeleton className="h-4 w-20" />
-                                        <Skeleton className="h-8 w-24" />
+                                        <Skeleton className="h-9 w-24" />
                                     </div>
                                 </div>
                             </div>
@@ -377,6 +439,91 @@ export default function Profile() {
                     currentUserId={authUser?.id || null}
                     onBooked={loadItems}
                 />
+
+                {/* Reviews section */}
+                <div className="mt-12">
+                    <h2 className="text-2xl font-bold text-[#1E1E1E]">
+                        Reviews
+                    </h2>
+                    <p className="text-sm text-[#1E1E1E]/60 mt-1">
+                        {loadingReviews
+                            ? "Loading reviews..."
+                            : `${reviews.length} review${
+                                  reviews.length === 1 ? "" : "s"
+                              }`}
+                    </p>
+                    <div className="mt-4 space-y-4">
+                        {loadingReviews ? (
+                            <div className="bg-white rounded-xl border border-[#1E1E1E]/10 p-6">
+                                <Skeleton className="h-6 w-1/3 mb-2" />
+                                <Skeleton className="h-4 w-2/3" />
+                            </div>
+                        ) : reviews.length === 0 ? (
+                            <div className="text-[#1E1E1E]/60 text-sm bg-white rounded-xl border border-[#1E1E1E]/10 p-6">
+                                No reviews yet.
+                            </div>
+                        ) : (
+                            reviews.map((rv) => (
+                                <div
+                                    key={rv.review_id}
+                                    className="bg-white rounded-xl border border-[#1E1E1E]/10 p-5"
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="h-10 w-10 rounded-full bg-[#FFAB00]/20 overflow-hidden flex-shrink-0">
+                                            {rv.reviewer?.profile_pic_url ? (
+                                                <img
+                                                    src={
+                                                        rv.reviewer
+                                                            .profile_pic_url
+                                                    }
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            ) : null}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between">
+                                                <div className="font-semibold text-[#1E1E1E] truncate">
+                                                    {(
+                                                        rv.reviewer
+                                                            ?.first_name || ""
+                                                    ).trim()}{" "}
+                                                    {(
+                                                        rv.reviewer
+                                                            ?.last_name || ""
+                                                    ).trim()}
+                                                </div>
+                                                <div className="text-xs text-[#1E1E1E]/60">
+                                                    {new Date(
+                                                        rv.created_at
+                                                    ).toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1 mt-1">
+                                                {Array.from({ length: 5 }).map(
+                                                    (_, i) => (
+                                                        <Star
+                                                            key={i}
+                                                            className={`h-4 w-4 ${
+                                                                i < rv.rating
+                                                                    ? "fill-[#FFAB00] text-[#FFAB00]"
+                                                                    : "text-[#1E1E1E]/20"
+                                                            }`}
+                                                        />
+                                                    )
+                                                )}
+                                            </div>
+                                            {rv.comment && (
+                                                <p className="text-sm text-[#1E1E1E]/80 mt-2 whitespace-pre-wrap">
+                                                    {rv.comment}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -384,32 +531,53 @@ export default function Profile() {
 
 function OwnedItemsGrid({ items, isOwner, onChanged, onRent }) {
     if (!items || items.length === 0) {
-        return <p className="text-sm text-gray-600">No active posts.</p>;
+        return (
+            <div className="text-center py-16 bg-white rounded-xl border border-[#1E1E1E]/10">
+                <p className="text-[#1E1E1E]/60 text-lg">
+                    No active posts yet.
+                </p>
+            </div>
+        );
     }
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {items.map((it) => (
                 <div
                     key={it.item_id}
-                    className="relative border rounded-lg overflow-hidden bg-white"
+                    className="group relative border border-[#1E1E1E]/10 rounded-xl overflow-hidden bg-white transition-all hover:shadow-lg hover:-translate-y-1"
                 >
-                    {it.imageUrl && (
-                        <img
-                            src={it.imageUrl}
-                            alt={it.title}
-                            className="w-full h-40 object-cover"
-                        />
+                    {it.imageUrl ? (
+                        <div className="relative h-48 overflow-hidden bg-[#FAF5EF]">
+                            <img
+                                src={it.imageUrl || "/placeholder.svg"}
+                                alt={it.title}
+                                className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                            />
+                        </div>
+                    ) : (
+                        <div className="h-48 bg-gradient-to-br from-[#FAF5EF] to-[#FFAB00]/10 flex items-center justify-center">
+                            <span className="text-[#1E1E1E]/30 text-sm">
+                                No image
+                            </span>
+                        </div>
                     )}
-                    <div className="p-3">
-                        <div className="flex items-start justify-between gap-2">
-                            <div>
-                                <p className="font-medium line-clamp-1">
+                    <div className="p-4">
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                            <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-[#1E1E1E] text-lg line-clamp-1 mb-1">
                                     {it.title}
-                                </p>
-                                <p className="text-sm text-gray-600">
-                                    ₱{Number(it.price_per_day || 0).toFixed(2)}{" "}
-                                    / day
-                                </p>
+                                </h3>
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-2xl font-bold text-[#FFAB00]">
+                                        ₱
+                                        {Number(it.price_per_day || 0).toFixed(
+                                            0
+                                        )}
+                                    </span>
+                                    <span className="text-sm text-[#1E1E1E]/60">
+                                        / day
+                                    </span>
+                                </div>
                             </div>
                             {isOwner && (
                                 <OwnerItemActions
@@ -418,24 +586,27 @@ function OwnedItemsGrid({ items, isOwner, onChanged, onRent }) {
                                 />
                             )}
                         </div>
-                        <div className="mt-2 text-xs text-gray-600 flex justify-between">
-                            <span>Units: {Number(it.quantity) || 1}</span>
+                        <div className="flex items-center justify-between text-xs text-[#1E1E1E]/60 mb-3 pb-3 border-b border-[#1E1E1E]/10">
+                            <span className="font-medium">
+                                {Number(it.quantity) || 1}{" "}
+                                {Number(it.quantity) === 1 ? "unit" : "units"}
+                            </span>
                             {it.location && (
-                                <span className="truncate max-w-[50%] text-right">
-                                    {it.location}
-                                </span>
+                                <div className="flex items-center gap-1 truncate max-w-[60%]">
+                                    <MapPin className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">
+                                        {it.location}
+                                    </span>
+                                </div>
                             )}
                         </div>
                         {!isOwner && (
-                            <div className="mt-3 flex justify-end">
-                                <Button
-                                    size="sm"
-                                    className="cursor-pointer"
-                                    onClick={() => onRent?.(it)}
-                                >
-                                    Rent Now
-                                </Button>
-                            </div>
+                            <Button
+                                className="w-full bg-[#FFAB00] hover:bg-[#FFAB00]/90 text-[#1E1E1E] font-medium cursor-pointer transition-all"
+                                onClick={() => onRent?.(it)}
+                            >
+                                Rent Now
+                            </Button>
                         )}
                     </div>
                 </div>
@@ -493,9 +664,9 @@ function OwnerItemActions({ item, onChanged }) {
                     <Button
                         size="icon"
                         variant="ghost"
-                        className="cursor-pointer"
+                        className="cursor-pointer h-8 w-8 hover:bg-[#1E1E1E]/5"
                     >
-                        <EllipsisVertical className="w-5 h-5" />
+                        <EllipsisVertical className="w-4 h-4" />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-48">
@@ -506,7 +677,7 @@ function OwnerItemActions({ item, onChanged }) {
                     <DropdownMenuItem
                         onClick={() => {
                             const input = prompt("How many units to add?", "1");
-                            const n = parseInt(input || "0", 10);
+                            const n = Number.parseInt(input || "0", 10);
                             if (!Number.isFinite(n) || n <= 0) return;
                             updateQuantity(n);
                         }}
@@ -520,7 +691,7 @@ function OwnerItemActions({ item, onChanged }) {
                                 "How many units to subtract?",
                                 "1"
                             );
-                            const n = parseInt(input || "0", 10);
+                            const n = Number.parseInt(input || "0", 10);
                             if (!Number.isFinite(n) || n <= 0) return;
                             updateQuantity(-n);
                         }}
@@ -591,15 +762,15 @@ function EditItemModal({ open, onOpenChange, item, onSaved }) {
                 title: form.title.trim() || null,
                 description: form.description.trim() || null,
                 price_per_day: form.price_per_day
-                    ? parseFloat(form.price_per_day)
+                    ? Number.parseFloat(form.price_per_day)
                     : null,
                 deposit_fee: form.deposit_fee
-                    ? parseFloat(form.deposit_fee)
+                    ? Number.parseFloat(form.deposit_fee)
                     : 0,
                 location: form.location.trim() || null,
                 available: !!form.available,
                 quantity: form.quantity
-                    ? Math.max(0, parseInt(form.quantity, 10) || 0)
+                    ? Math.max(0, Number.parseInt(form.quantity, 10) || 0)
                     : 0,
             };
             const { error } = await supabase
@@ -619,107 +790,129 @@ function EditItemModal({ open, onOpenChange, item, onSaved }) {
 
     if (!open) return null;
     return (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold">Edit Post</h3>
+        <div className="fixed inset-0 bg-[#1E1E1E]/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-2xl font-bold text-[#1E1E1E]">
+                        Edit Post
+                    </h3>
                     <button
-                        className="text-sm text-gray-600"
+                        className="text-[#1E1E1E]/60 hover:text-[#1E1E1E] transition-colors"
                         onClick={() => onOpenChange(false)}
                     >
-                        ✕
+                        <span className="text-2xl">×</span>
                     </button>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
-                        <label className="text-sm">Title</label>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-[#1E1E1E] mb-1.5">
+                            Title
+                        </label>
                         <input
                             name="title"
                             value={form.title}
                             onChange={onChange}
-                            className="w-full border rounded px-2 py-1"
+                            className="w-full border border-[#1E1E1E]/20 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-transparent"
                         />
                     </div>
-                    <div className="col-span-2">
-                        <label className="text-sm">Description</label>
+                    <div>
+                        <label className="block text-sm font-medium text-[#1E1E1E] mb-1.5">
+                            Description
+                        </label>
                         <textarea
                             name="description"
                             value={form.description}
                             onChange={onChange}
-                            className="w-full border rounded px-2 py-1 min-h-20"
+                            className="w-full border border-[#1E1E1E]/20 rounded-lg px-3 py-2 min-h-24 focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-transparent"
                         />
                     </div>
-                    <div>
-                        <label className="text-sm">Price per day (₱)</label>
-                        <input
-                            name="price_per_day"
-                            type="number"
-                            step="0.01"
-                            value={form.price_per_day}
-                            onChange={onChange}
-                            className="w-full border rounded px-2 py-1"
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-[#1E1E1E] mb-1.5">
+                                Price per day (₱)
+                            </label>
+                            <input
+                                name="price_per_day"
+                                type="number"
+                                step="0.01"
+                                value={form.price_per_day}
+                                onChange={onChange}
+                                className="w-full border border-[#1E1E1E]/20 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-transparent"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-[#1E1E1E] mb-1.5">
+                                Deposit (₱)
+                            </label>
+                            <input
+                                name="deposit_fee"
+                                type="number"
+                                step="0.01"
+                                value={form.deposit_fee}
+                                onChange={onChange}
+                                className="w-full border border-[#1E1E1E]/20 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-transparent"
+                            />
+                        </div>
                     </div>
-                    <div>
-                        <label className="text-sm">Deposit (₱)</label>
-                        <input
-                            name="deposit_fee"
-                            type="number"
-                            step="0.01"
-                            value={form.deposit_fee}
-                            onChange={onChange}
-                            className="w-full border rounded px-2 py-1"
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-[#1E1E1E] mb-1.5">
+                                Quantity
+                            </label>
+                            <input
+                                name="quantity"
+                                type="number"
+                                step="1"
+                                min="0"
+                                value={form.quantity}
+                                onChange={onChange}
+                                className="w-full border border-[#1E1E1E]/20 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-transparent"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-[#1E1E1E] mb-1.5">
+                                Location
+                            </label>
+                            <input
+                                name="location"
+                                value={form.location}
+                                onChange={onChange}
+                                className="w-full border border-[#1E1E1E]/20 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-transparent"
+                            />
+                        </div>
                     </div>
-                    <div>
-                        <label className="text-sm">Quantity</label>
-                        <input
-                            name="quantity"
-                            type="number"
-                            step="1"
-                            min="0"
-                            value={form.quantity}
-                            onChange={onChange}
-                            className="w-full border rounded px-2 py-1"
-                        />
-                    </div>
-                    <div>
-                        <label className="text-sm">Location</label>
-                        <input
-                            name="location"
-                            value={form.location}
-                            onChange={onChange}
-                            className="w-full border rounded px-2 py-1"
-                        />
-                    </div>
-                    <div className="col-span-2 flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 pt-2">
                         <input
                             id="available"
                             name="available"
                             type="checkbox"
                             checked={form.available}
                             onChange={onChange}
+                            className="h-4 w-4 rounded border-[#1E1E1E]/20 text-[#FFAB00] focus:ring-[#FFAB00]"
                         />
-                        <label htmlFor="available" className="text-sm">
-                            Available
+                        <label
+                            htmlFor="available"
+                            className="text-sm font-medium text-[#1E1E1E]"
+                        >
+                            Available for booking
                         </label>
                     </div>
                 </div>
-                <div className="mt-4 flex justify-end gap-2">
+                <div className="mt-6 flex justify-end gap-3">
                     <Button
                         variant="outline"
-                        className="cursor-pointer"
+                        className="cursor-pointer border-[#1E1E1E]/20 hover:bg-[#1E1E1E]/5 bg-transparent"
                         onClick={() => onOpenChange(false)}
                         disabled={saving}
                     >
                         Cancel
                     </Button>
                     <Button
-                        className="cursor-pointer"
+                        className="cursor-pointer bg-[#FFAB00] hover:bg-[#FFAB00]/90 text-[#1E1E1E] font-medium"
                         onClick={save}
                         disabled={saving}
                     >
-                        {saving ? "Saving..." : "Save"}
+                        {saving ? "Saving..." : "Save Changes"}
                     </Button>
                 </div>
             </div>

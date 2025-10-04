@@ -11,12 +11,12 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "../../supabaseClient";
 import { useToastApi } from "@/components/ui/toast";
 
+// Keep this list conservative to match complaint_reason_enum on the DB
 const DEFAULT_REASONS = [
     "fraud",
     "harassment",
     "inappropriate",
     "spam",
-    "damaged",
     "other",
 ];
 
@@ -49,15 +49,39 @@ export default function ReportDialog({
         if (!canSubmit) return;
         try {
             setSubmitting(true);
-            const payload = {
+            // Decide target table: items -> complaints, users -> user_complaints
+            const isItemReport = !!targetItemId;
+            const table = isItemReport ? "complaints" : "user_complaints";
+
+            // Build payload specific to table shape
+            const base = {
                 sender_id: senderId,
-                target_user_id: targetUserId || null,
-                target_item_id: targetItemId || null,
                 rental_id: rentalId || null,
                 reason: reason || "other",
                 content: content || null,
             };
-            const { error } = await supabase.from("complaints").insert(payload);
+            const payload = isItemReport
+                ? {
+                      ...base,
+                      target_item_id: targetItemId,
+                      target_user_id: targetUserId, // Include owner ID for item reports
+                  }
+                : { ...base, target_user_id: targetUserId };
+
+            let { error } = await supabase.from(table).insert(payload);
+            // Auto-fallback if reason is not part of the enum
+            if (
+                error &&
+                typeof error.message === "string" &&
+                /invalid input value for enum/i.test(error.message)
+            ) {
+                const retryPayload = { ...payload, reason: "other" };
+                const retry = await supabase.from(table).insert(retryPayload);
+                error = retry.error;
+                if (!error) {
+                    toast.info("Reason not supported. Saved under 'other'.");
+                }
+            }
             if (error) throw error;
             toast.success("Report submitted. Our team will review.");
             setOpen(false);
@@ -65,6 +89,7 @@ export default function ReportDialog({
             setReason(reasons[reasons.length - 1] || "other");
             onSubmitted?.();
         } catch (err) {
+            console.error("Report submit failed:", err);
             toast.error(
                 err?.message?.includes("invalid input value for enum")
                     ? "Report failed: unsupported reason. Please try 'other'."

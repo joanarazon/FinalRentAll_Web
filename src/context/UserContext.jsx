@@ -6,17 +6,44 @@ import React, {
     useState,
 } from "react";
 import { supabase } from "../../supabaseClient";
+import { useToastApi } from "@/components/ui/toast";
 
 const UserContext = createContext({
     user: null,
     loading: true,
-    logout: async () => { },
-    refresh: async () => { },
+    logout: async () => {},
+    refresh: async () => {},
 });
 
 export function UserProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const toast = useToastApi();
+
+    // Centralized, robust logout that also flushes local caches
+    const forceLogout = async (message) => {
+        try {
+            // Best-effort sign out; don't block on errors
+            await supabase.auth.signOut();
+        } catch (_) {
+            // ignore
+        } finally {
+            try {
+                localStorage.removeItem("loggedInUser");
+                localStorage.removeItem("supabase.auth.token");
+            } catch (_) {
+                // ignore
+            }
+            setUser(null);
+            if (message) {
+                try {
+                    toast.info(message, { duration: 2500 });
+                } catch (_) {
+                    // ignore toast errors
+                }
+            }
+        }
+    };
 
     const loadProfile = async (authUser) => {
         if (!authUser) return null;
@@ -27,16 +54,30 @@ export function UserProvider({ children }) {
                 .select("*")
                 .eq("id", authUser.id)
                 .maybeSingle();
-            if (!error) profile = data || null;
-        } catch (_) {
-            // ignore; will fallback to minimal user
+            if (error) {
+                throw error;
+            }
+            // If the row is missing, treat as fatal (flush & require re-onboarding)
+            if (!data) {
+                const err = new Error("PROFILE_NOT_FOUND");
+                err.code = "PROFILE_NOT_FOUND";
+                throw err;
+            }
+            profile = data;
+        } catch (err) {
+            // Propagate so callers can decide to flush/logout
+            throw err;
         }
         const merged = {
             id: authUser.id,
             email: authUser.email,
             ...(profile || {}),
         };
-        localStorage.setItem("loggedInUser", JSON.stringify(merged));
+        try {
+            localStorage.setItem("loggedInUser", JSON.stringify(merged));
+        } catch (_) {
+            // ignore quota/storage issues
+        }
         return merged;
     };
 
@@ -45,13 +86,25 @@ export function UserProvider({ children }) {
             const { data: sessionData } = await supabase.auth.getSession();
             const authUser = sessionData?.session?.user || null;
             if (authUser) {
-                const merged = await loadProfile(authUser);
-                if (merged) setUser(merged);
+                try {
+                    const merged = await loadProfile(authUser);
+                    if (merged) setUser(merged);
+                } catch (err) {
+                    console.warn(
+                        "Profile refresh failed, logging out:",
+                        err?.message || err
+                    );
+                    const msg =
+                        err?.code === "PROFILE_NOT_FOUND"
+                            ? "Your account was not found. Please sign in again."
+                            : "Your session expired. Please sign in again.";
+                    await forceLogout(msg);
+                }
             } else {
                 localStorage.removeItem("loggedInUser");
                 setUser(null);
             }
-        } catch (_) { }
+        } catch (_) {}
     };
 
     useEffect(() => {
@@ -63,8 +116,20 @@ export function UserProvider({ children }) {
                 if (authUser) {
                     // Keep current user if same id; otherwise refresh
                     if (!user || user.id !== authUser.id || !user.role) {
-                        const merged = await loadProfile(authUser);
-                        if (mounted && merged) setUser(merged);
+                        try {
+                            const merged = await loadProfile(authUser);
+                            if (mounted && merged) setUser(merged);
+                        } catch (err) {
+                            console.warn(
+                                "Initial session load failed, logging out:",
+                                err?.message || err
+                            );
+                            const msg =
+                                err?.code === "PROFILE_NOT_FOUND"
+                                    ? "Your account was not found. Please sign in again."
+                                    : "Your session expired. Please sign in again.";
+                            await forceLogout(msg);
+                        }
                     }
                 } else {
                     localStorage.removeItem("loggedInUser");
@@ -95,9 +160,21 @@ export function UserProvider({ children }) {
                         };
                         setUser(minimal);
                         // Kick off profile enhancement without blocking guards
-                        loadProfile(authUser).then((merged) => {
-                            if (merged) setUser(merged);
-                        });
+                        loadProfile(authUser)
+                            .then((merged) => {
+                                if (merged) setUser(merged);
+                            })
+                            .catch(async (err) => {
+                                console.warn(
+                                    "Auth change profile load failed, logging out:",
+                                    err?.message || err
+                                );
+                                const msg =
+                                    err?.code === "PROFILE_NOT_FOUND"
+                                        ? "Your account was not found. Please sign in again."
+                                        : "Your session expired. Please sign in again.";
+                                await forceLogout(msg);
+                            });
                     }
                 } else if (event === "SIGNED_OUT") {
                     localStorage.removeItem("loggedInUser");
@@ -120,19 +197,7 @@ export function UserProvider({ children }) {
         };
     }, []);
 
-    const logout = async () => {
-        try {
-            const { error } = await supabase.auth.signOut({ scope: "local" });
-            if (error) throw error;
-        } catch (err) {
-            console.warn("Supabase logout error (ignored):", err.message);
-        } finally {
-            // Clear local state anyway
-            setUser(null);
-            localStorage.removeItem("supabase.auth.token"); // optional, clear manually
-        }
-    };
-
+    const logout = forceLogout;
 
     const value = useMemo(
         () => ({ user, loading, logout, refresh }),

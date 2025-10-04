@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "../../supabaseClient";
+import Swal from "sweetalert2";
 
 export default function AddItemModal({
     open,
@@ -51,17 +52,25 @@ export default function AddItemModal({
 
     const handleSubmit = async () => {
         if (!userId) {
-            alert("You must be logged in to add an item.");
+            Swal.fire({
+                icon: "info",
+                title: "Sign in required",
+                text: "You must be logged in to add an item.",
+            });
             return;
         }
         if (!form.title || !form.price_per_day) {
-            alert("Title and Price per day are required.");
+            Swal.fire({
+                icon: "warning",
+                title: "Missing fields",
+                text: "Title and Price per day are required.",
+            });
             return;
         }
         try {
             setLoading(true);
 
-            // Step 1: Insert item; let DB generate item_id (default gen_random_uuid())
+            // Step 1: Insert item; let DB generate item_id
             const basePayload = {
                 user_id: userId,
                 title: form.title.trim(),
@@ -129,10 +138,15 @@ export default function AddItemModal({
                 ...basePayload,
                 main_image_url: publicUrl,
             });
-            alert(
-                "Item created successfully" +
-                    (publicUrl ? " (image uploaded)" : "")
-            );
+            Swal.fire({
+                icon: "success",
+                title: "Item created",
+                text: `Item created successfully${
+                    publicUrl ? " (image uploaded)" : ""
+                }`,
+                timer: 2000,
+                showConfirmButton: false,
+            });
 
             setForm({
                 title: "",
@@ -148,7 +162,11 @@ export default function AddItemModal({
             onOpenChange(false);
         } catch (e) {
             console.error("Create item error:", e.message);
-            alert("Failed to create item: " + e.message);
+            Swal.fire({
+                icon: "error",
+                title: "Create failed",
+                text: "Failed to create item: " + e.message,
+            });
         } finally {
             setLoading(false);
         }
@@ -198,44 +216,41 @@ export default function AddItemModal({
                         className="border rounded-md px-3 py-2 text-sm min-h-24"
                         placeholder="Condition, accessories, etc."
                     />
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-sm">
-                                Price per day (₱)
-                                <span className="text-red-500">*</span>
-                            </label>
-                            <Input
-                                name="price_per_day"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={form.price_per_day}
-                                onChange={onChange}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-sm">Deposit fee (₱)</label>
-                            <Input
-                                name="deposit_fee"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={form.deposit_fee}
-                                onChange={onChange}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-sm">Quantity</label>
-                            <Input
-                                name="quantity"
-                                type="number"
-                                min="1"
-                                step="1"
-                                value={form.quantity}
-                                onChange={onChange}
-                            />
-                        </div>
+                    <div>
+                        <label className="text-sm">
+                            Price per day (₱)
+                            <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                            name="price_per_day"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={form.price_per_day}
+                            onChange={onChange}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-sm">Deposit fee (₱)</label>
+                        <Input
+                            name="deposit_fee"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={form.deposit_fee}
+                            onChange={onChange}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-sm">Quantity</label>
+                        <Input
+                            name="quantity"
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={form.quantity}
+                            onChange={onChange}
+                        />
                     </div>
 
                     <label className="text-sm">Location</label>

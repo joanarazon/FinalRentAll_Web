@@ -260,7 +260,13 @@ const Chat = ({ favorites, searchTerm, setSearchTerm }) => {
                 delete newState[tempMessageId];
                 return newState;
             });
-            alert("Failed to send image. Please try again.");
+            import("sweetalert2").then(({ default: Swal }) =>
+                Swal.fire({
+                    icon: "error",
+                    title: "Failed",
+                    text: "Failed to send image. Please try again.",
+                })
+            );
         } finally {
             setUploadingImage(false);
             event.target.value = "";
@@ -338,7 +344,13 @@ const Chat = ({ favorites, searchTerm, setSearchTerm }) => {
                 .eq("id", conversationId);
         } catch (error) {
             console.error("Error sending message:", error);
-            alert("Failed to send message. Please try again.");
+            import("sweetalert2").then(({ default: Swal }) =>
+                Swal.fire({
+                    icon: "error",
+                    title: "Failed",
+                    text: "Failed to send message. Please try again.",
+                })
+            );
             setNewMessage(messageContent);
         } finally {
             setSending(false);
