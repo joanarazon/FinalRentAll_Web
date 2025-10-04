@@ -28,6 +28,7 @@ import {
     DialogTitle,
     DialogFooter,
 } from "@/components/ui/dialog";
+import ReportDialog from "@/components/ReportDialog";
 
 function StatusBadge({ status }) {
     const s = String(status || "").toLowerCase();
@@ -425,30 +426,6 @@ export default function OwnerBookingRequests({
         }
     };
 
-    const declineDeposit = async (txId) => {
-        setActionId(txId);
-        try {
-            const { error } = await supabase
-                .from("rental_transactions")
-                .update({ status: "confirmed", proof_of_deposit_url: null })
-                .eq("rental_id", txId)
-                .eq("status", "deposit_submitted");
-            if (error) {
-                toast.error(
-                    `Decline failed: ${error.message || "Unknown error"}`
-                );
-                throw error;
-            } else {
-                toast.info("Deposit declined. Renter can re-upload.");
-            }
-        } catch (e) {
-            console.error("Decline deposit failed:", e.message);
-        } finally {
-            setActionId(null);
-            fetchData();
-        }
-    };
-
     const openProof = async (pathOrUrl, title = "Deposit Proof") => {
         try {
             if (!pathOrUrl) return;
@@ -622,10 +599,10 @@ export default function OwnerBookingRequests({
                                         rental={r}
                                         tabKey={activeTab}
                                         actionId={actionId}
+                                        user={user}
                                         onApprove={approve}
                                         onReject={reject}
                                         onVerifyDeposit={verifyDeposit}
-                                        onDeclineDeposit={declineDeposit}
                                         onConfirmReturn={confirmReturn}
                                         onHoldReturn={holdReturn}
                                         onReportIssue={reportIssue}
@@ -652,10 +629,10 @@ function BookingCard({
     rental,
     tabKey,
     actionId,
+    user,
     onApprove,
     onReject,
     onVerifyDeposit,
-    onDeclineDeposit,
     onConfirmReturn,
     onHoldReturn,
     onReportIssue,
@@ -755,10 +732,10 @@ function BookingCard({
                     tabKey={tabKey}
                     rental={rental}
                     actionId={actionId}
+                    user={user}
                     onApprove={onApprove}
                     onReject={onReject}
                     onVerifyDeposit={onVerifyDeposit}
-                    onDeclineDeposit={onDeclineDeposit}
                     onConfirmReturn={onConfirmReturn}
                     onHoldReturn={onHoldReturn}
                     onReportIssue={onReportIssue}
@@ -773,10 +750,10 @@ function ActionBar({
     tabKey,
     rental,
     actionId,
+    user,
     onApprove,
     onReject,
     onVerifyDeposit,
-    onDeclineDeposit,
     onConfirmReturn,
     onHoldReturn,
     onReportIssue,
@@ -857,19 +834,29 @@ function ActionBar({
                                 "Verify & Send"
                             )}
                         </Button>
-                        <Button
-                            size="sm"
-                            variant="destructive"
-                            className="cursor-pointer"
-                            disabled={isLoading}
-                            onClick={() => onDeclineDeposit(rental.rental_id)}
-                        >
-                            {isLoading ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                "Decline"
-                            )}
-                        </Button>
+                        <ReportDialog
+                            trigger={
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-red-200 text-red-600 hover:bg-red-50 cursor-pointer"
+                                    disabled={isLoading}
+                                >
+                                    Report User
+                                </Button>
+                            }
+                            senderId={user?.id}
+                            targetUserId={rental.renter_id}
+                            rentalId={rental.rental_id}
+                            reasons={[
+                                "fraudulent_deposit",
+                                "suspected_scam",
+                                "fake_information",
+                                "other",
+                            ]}
+                            title="Report User for Fraudulent Activity"
+                            description="Report this user if you suspect fraudulent deposit proof, scam activity, or fake information."
+                        />
                     </>
                 )}
 
