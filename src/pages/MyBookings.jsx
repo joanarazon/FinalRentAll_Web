@@ -27,6 +27,7 @@ import {
 } from "@/lib/reviews";
 import ReportDialog from "@/components/ReportDialog";
 import { Badge } from "@/components/ui/badge";
+import { handleBookingStatusChange } from "../lib/notificationEvents";
 import {
     Clock,
     Calendar,
@@ -80,6 +81,7 @@ const BOOKING_TABS = [
     { key: "ongoing", label: "Ongoing", tip: null },
     { key: "awaitingOwnerConfirmReturn", label: "Returned", tip: null },
     { key: "completed", label: "Completed", tip: null },
+    { key: "cancelled", label: "Cancelled/Rejected", tip: null },
 ];
 
 export default function MyBookings() {
@@ -859,6 +861,22 @@ function MarkReturned({ rental, onChanged }) {
     const doMark = async () => {
         try {
             setSubmitting(true);
+
+            // Get booking details for notification
+            const { data: bookingDetails, error: fetchError } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `
+                    *,
+                    items!inner(title, user_id),
+                    renter:renter_id(first_name, last_name)
+                `
+                )
+                .eq("rental_id", rental.rental_id)
+                .single();
+
+            if (fetchError) throw fetchError;
+
             const { error } = await supabase
                 .from("rental_transactions")
                 .update({
@@ -868,9 +886,39 @@ function MarkReturned({ rental, onChanged }) {
                 .eq("rental_id", rental.rental_id)
                 .in("status", ["confirmed", "ongoing"]);
             if (error) throw error;
+
             toast.success(
                 "Marked as returned. Waiting for owner confirmation."
             );
+
+            // Trigger notification to owner
+            try {
+                const renterName = bookingDetails.renter
+                    ? `${bookingDetails.renter.first_name || ""} ${
+                          bookingDetails.renter.last_name || ""
+                      }`.trim()
+                    : "The renter";
+
+                await handleBookingStatusChange(
+                    bookingDetails.status,
+                    "awaiting_owner_confirmation",
+                    {
+                        ...bookingDetails,
+                        status: "awaiting_owner_confirmation",
+                    },
+                    bookingDetails.items,
+                    {
+                        renter: { full_name: renterName },
+                        owner: bookingDetails.owner,
+                    }
+                );
+            } catch (notificationError) {
+                console.error(
+                    "Failed to send return notification:",
+                    notificationError
+                );
+            }
+
             onChanged && onChanged();
         } catch (e) {
             toast.error(
@@ -898,13 +946,60 @@ function MarkCheckIn({ rental, onChanged }) {
     const doMark = async () => {
         try {
             setLoading(true);
+
+            // Get booking details for notification
+            const { data: bookingDetails, error: fetchError } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `
+                    *,
+                    items!inner(title, user_id),
+                    renter:renter_id(first_name, last_name)
+                `
+                )
+                .eq("rental_id", rental.rental_id)
+                .single();
+
+            if (fetchError) throw fetchError;
+
             const { error } = await supabase
                 .from("rental_transactions")
                 .update({ status: "ongoing" })
                 .eq("rental_id", rental.rental_id)
                 .eq("status", "on_the_way");
             if (error) throw error;
+
             toast.success("Checked in. Enjoy your stay!");
+
+            // Trigger notification to owner
+            try {
+                const renterName = bookingDetails.renter
+                    ? `${bookingDetails.renter.first_name || ""} ${
+                          bookingDetails.renter.last_name || ""
+                      }`.trim()
+                    : "The renter";
+
+                await handleBookingStatusChange(
+                    "on_the_way",
+                    "ongoing",
+                    {
+                        ...bookingDetails,
+                        status: "ongoing",
+                        owner_id: bookingDetails.items.user_id, // Add owner_id from items.user_id
+                    },
+                    bookingDetails.items,
+                    {
+                        renter: { full_name: renterName },
+                        owner: bookingDetails.owner,
+                    }
+                );
+            } catch (notificationError) {
+                console.error(
+                    "Failed to send check-in notification:",
+                    notificationError
+                );
+            }
+
             onChanged && onChanged();
         } catch (e) {
             toast.error(e.message || "Could not update");
@@ -930,6 +1025,22 @@ function MarkCheckout({ rental, onChanged }) {
     const doMark = async () => {
         try {
             setSubmitting(true);
+
+            // Get booking details for notification
+            const { data: bookingDetails, error: fetchError } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `
+                    *,
+                    items!inner(title, user_id),
+                    renter:renter_id(first_name, last_name)
+                `
+                )
+                .eq("rental_id", rental.rental_id)
+                .single();
+
+            if (fetchError) throw fetchError;
+
             const { error } = await supabase
                 .from("rental_transactions")
                 .update({
@@ -939,7 +1050,38 @@ function MarkCheckout({ rental, onChanged }) {
                 .eq("rental_id", rental.rental_id)
                 .in("status", ["confirmed", "ongoing"]);
             if (error) throw error;
+
             toast.success("Checked out. Waiting for host confirmation.");
+
+            // Trigger notification to owner
+            try {
+                const renterName = bookingDetails.renter
+                    ? `${bookingDetails.renter.first_name || ""} ${
+                          bookingDetails.renter.last_name || ""
+                      }`.trim()
+                    : "The renter";
+
+                await handleBookingStatusChange(
+                    "ongoing",
+                    "awaiting_owner_confirmation",
+                    {
+                        ...bookingDetails,
+                        status: "awaiting_owner_confirmation",
+                        owner_id: bookingDetails.items.user_id,
+                    },
+                    bookingDetails.items,
+                    {
+                        renter: { full_name: renterName },
+                        owner: bookingDetails.owner,
+                    }
+                );
+            } catch (notificationError) {
+                console.error(
+                    "Failed to send checkout notification:",
+                    notificationError
+                );
+            }
+
             onChanged && onChanged();
         } catch (e) {
             toast.error(
@@ -1426,6 +1568,33 @@ function UploadDeposit({ rental, onChanged }) {
                     contentType: file.type || "application/octet-stream",
                 });
             if (upErr) throw upErr;
+
+            // Get booking details for notification
+            const { data: bookingDetails, error: fetchError } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `
+                    *,
+                    items!inner(title, user_id),
+                    renter:renter_id(first_name, last_name)
+                `
+                )
+                .eq("rental_id", rental.rental_id)
+                .single();
+
+            if (fetchError) throw fetchError;
+
+            // Add owner_id to booking object for notification system (from items.user_id)
+            bookingDetails.owner_id = bookingDetails.items?.user_id;
+
+            // Debug logging
+            console.log("Booking details for notification:", {
+                rental_id: bookingDetails.rental_id,
+                owner_id: bookingDetails.owner_id,
+                items_user_id: bookingDetails.items?.user_id,
+                renter_id: bookingDetails.renter_id,
+            });
+
             const { error } = await supabase
                 .from("rental_transactions")
                 .update({
@@ -1435,7 +1604,34 @@ function UploadDeposit({ rental, onChanged }) {
                 .eq("rental_id", rental.rental_id)
                 .eq("status", "confirmed");
             if (error) throw error;
+
             toast.success("Deposit uploaded. Waiting for owner verification.");
+
+            // Trigger notification to owner
+            try {
+                const renterName = bookingDetails.renter
+                    ? `${bookingDetails.renter.first_name || ""} ${
+                          bookingDetails.renter.last_name || ""
+                      }`.trim()
+                    : "The renter";
+
+                await handleBookingStatusChange(
+                    "confirmed",
+                    "deposit_submitted",
+                    { ...bookingDetails, status: "deposit_submitted" },
+                    bookingDetails.items,
+                    {
+                        renter: { full_name: renterName },
+                        owner: bookingDetails.owner,
+                    }
+                );
+            } catch (notificationError) {
+                console.error(
+                    "Failed to send deposit upload notification:",
+                    notificationError
+                );
+            }
+
             setOpen(false);
             onChanged && onChanged();
         } catch (err) {

@@ -28,6 +28,7 @@ import MyRatings from "./pages/MyRatings";
 import Profile from "./pages/Profile";
 import Favorites from "./pages/Favorites.jsx";
 import { useUserContext } from "./context/UserContext.jsx";
+import { NotificationProvider } from "./context/NotificationContext.jsx";
 import Loading from "./components/Loading.jsx";
 import PendingVerification from "./pages/PendingVerification.jsx";
 import Chat from "./components/Chat.jsx";
@@ -53,61 +54,78 @@ export default function App() {
     // If needed, call requestNotificationsAndToken() from a user action.
 
     return (
-        <Router>
-            <Routes>
-                <Route path="/" element={<RoleAwareLanding />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/not-authorized" element={<NotAuthorized />} />
-                <Route
-                    path="/pending-verification"
-                    element={<PendingVerification />}
-                />
-                {/* User group */}
-                <Route
-                    element={
-                        <RequireAuth>
-                            <RequireRole allow={["user"]}>
-                                <Outlet />
-                            </RequireRole>
-                        </RequireAuth>
-                    }
-                >
-                    <Route path="/home" element={<Home />} />
-                    <Route path="/inbox" element={<Inbox />} />
-                    <Route path="/chat" element={<Chat />} />
-                    <Route path="/notifications" element={<Notification />} />
+        <NotificationProvider>
+            <Router>
+                <Routes>
+                    <Route path="/" element={<RoleAwareLanding />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/not-authorized" element={<NotAuthorized />} />
                     <Route
-                        path="/booking-requests"
-                        element={<OwnerBookingRequests />}
+                        path="/pending-verification"
+                        element={<PendingVerification />}
                     />
-                    <Route path="/my-bookings" element={<MyBookings />} />
-                    <Route path="/my-ratings" element={<MyRatings />} />
-                    <Route path="/profile" element={<Profile />} />
-                    <Route path="/profile/:id" element={<Profile />} />
-                    <Route path="/favorites" element={<Favorites />} />
-                </Route>
-                {/* Admin group */}
-                <Route
-                    element={
-                        <RequireAuth>
-                            <RequireRole allow={["admin"]}>
-                                <Outlet />
-                            </RequireRole>
-                        </RequireAuth>
-                    }
-                >
-                    <Route path="/adminhome" element={<AdminHome />} />
-                    <Route path="/pending-users" element={<PendingUser />} />
-                    <Route path="/pending-items" element={<PendingItems />} />
+                    {/* User group */}
                     <Route
-                        path="/renting-history"
-                        element={<ViewRentingHistory />}
-                    />
-                    <Route path="/reported-users" element={<ReportedUsers />} />
-                    <Route path="/reported-items" element={<ReportedItems />} />
-                </Route>
-                {/** Pending Bookings route hidden per product change (handled by lessors) **/}
-            </Routes>
-        </Router>
+                        element={
+                            <RequireAuth>
+                                <RequireRole allow={["user"]}>
+                                    <Outlet />
+                                </RequireRole>
+                            </RequireAuth>
+                        }
+                    >
+                        <Route path="/home" element={<Home />} />
+                        <Route path="/inbox" element={<Inbox />} />
+                        <Route path="/chat" element={<Chat />} />
+                        <Route
+                            path="/notifications"
+                            element={<Notification />}
+                        />
+                        <Route
+                            path="/booking-requests"
+                            element={<OwnerBookingRequests />}
+                        />
+                        <Route path="/my-bookings" element={<MyBookings />} />
+                        <Route path="/my-ratings" element={<MyRatings />} />
+                        <Route path="/profile" element={<Profile />} />
+                        <Route path="/profile/:id" element={<Profile />} />
+                        <Route path="/favorites" element={<Favorites />} />
+                    </Route>
+                    {/* Admin group */}
+                    <Route
+                        element={
+                            <RequireAuth>
+                                <RequireRole allow={["admin"]}>
+                                    <Outlet />
+                                </RequireRole>
+                            </RequireAuth>
+                        }
+                    >
+                        <Route path="/adminhome" element={<AdminHome />} />
+                        <Route
+                            path="/pending-users"
+                            element={<PendingUser />}
+                        />
+                        <Route
+                            path="/pending-items"
+                            element={<PendingItems />}
+                        />
+                        <Route
+                            path="/renting-history"
+                            element={<ViewRentingHistory />}
+                        />
+                        <Route
+                            path="/reported-users"
+                            element={<ReportedUsers />}
+                        />
+                        <Route
+                            path="/reported-items"
+                            element={<ReportedItems />}
+                        />
+                    </Route>
+                    {/** Pending Bookings route hidden per product change (handled by lessors) **/}
+                </Routes>
+            </Router>
+        </NotificationProvider>
     );
 }
