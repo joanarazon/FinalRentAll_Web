@@ -676,13 +676,36 @@ function MoreMenu({ rental, user, onChanged }) {
                     <DropdownMenuSeparator />
                     <ReportDialog
                         trigger={
-                            <DropdownMenuItem>Report owner</DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={(e) => {
+                                    e.preventDefault();
+                                }}
+                            >
+                                Report owner
+                            </DropdownMenuItem>
                         }
                         senderId={rental?.renter?.id || user?.id}
                         targetUserId={ownerId}
                         rentalId={rental.rental_id}
                         title="Report Owner"
                         description="Describe your issue with the owner for this booking."
+                    />
+                    <ReportDialog
+                        trigger={
+                            <DropdownMenuItem
+                                onSelect={(e) => {
+                                    e.preventDefault();
+                                }}
+                            >
+                                Report item
+                            </DropdownMenuItem>
+                        }
+                        senderId={rental?.renter?.id || user?.id}
+                        targetItemId={rental.item_id}
+                        targetUserId={ownerId}
+                        rentalId={rental.rental_id}
+                        title="Report Item"
+                        description="Describe your issue with this item for this booking."
                     />
                 </DropdownMenuContent>
             </DropdownMenu>

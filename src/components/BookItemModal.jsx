@@ -724,6 +724,7 @@ export default function BookItemModal({
                                             }
                                             senderId={currentUserId}
                                             targetItemId={item.item_id}
+                                            targetUserId={item.user_id}
                                             rentalId={null}
                                             title="Report Item"
                                             description="Describe the issue with this listing."

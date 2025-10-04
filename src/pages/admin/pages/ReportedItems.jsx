@@ -119,7 +119,8 @@ export default function ReportedItems() {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="border-b bg-gray-50">
-                                    <th className="p-2">Item</th>
+                                    <th className="p-2">Item ID</th>
+                                    <th className="p-2">Item Name</th>
                                     <th className="p-2">Reported By</th>
                                     <th className="p-2">Reason</th>
                                     <th className="p-2">Sent</th>
@@ -133,15 +134,11 @@ export default function ReportedItems() {
                                         key={r.complaint_id}
                                         className="border-b"
                                     >
+                                        <td className="p-2 text-sm font-mono">
+                                            {r.target_item_id || "—"}
+                                        </td>
                                         <td className="p-2 text-sm">
-                                            {r.item ? (
-                                                <span>
-                                                    {r.item.title} (
-                                                    {r.target_item_id})
-                                                </span>
-                                            ) : (
-                                                r.target_item_id
-                                            )}
+                                            {r.item?.title || "—"}
                                         </td>
                                         <td className="p-2 text-sm">
                                             {r.sender ? (
@@ -218,12 +215,14 @@ function ReportDetailsDialog({ row }) {
                 </DialogHeader>
                 <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                        <span>Item</span>
-                        <span>
-                            {row.item
-                                ? `${row.item.title} (${row.target_item_id})`
-                                : row.target_item_id}
+                        <span>Item ID</span>
+                        <span className="font-mono">
+                            {row.target_item_id || "—"}
                         </span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Item Name</span>
+                        <span>{row.item?.title || "—"}</span>
                     </div>
                     <div className="flex justify-between">
                         <span>Reported By</span>

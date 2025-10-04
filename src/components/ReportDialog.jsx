@@ -61,7 +61,11 @@ export default function ReportDialog({
                 content: content || null,
             };
             const payload = isItemReport
-                ? { ...base, target_item_id: targetItemId }
+                ? {
+                      ...base,
+                      target_item_id: targetItemId,
+                      target_user_id: targetUserId, // Include owner ID for item reports
+                  }
                 : { ...base, target_user_id: targetUserId };
 
             let { error } = await supabase.from(table).insert(payload);
