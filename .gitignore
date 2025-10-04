@@ -26,4 +26,5 @@ dist-ssr
 db
 #env
 .env
+.env.example
 supabase_schema.txt

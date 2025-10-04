@@ -19,7 +19,12 @@ const STEPS = [
     { key: "completed", label: "Completed", icon: CheckCircle2 },
 ];
 
-export function BookingSteps({ status, compact = false, timestamps = {} }) {
+export function BookingSteps({
+    status,
+    compact = false,
+    timestamps = {},
+    labelsOverride = null,
+}) {
     const s = String(status || "").toLowerCase();
     if (!s) return null;
     const idxS = STEPS.findIndex((st) => st.key === s);
@@ -32,10 +37,11 @@ export function BookingSteps({ status, compact = false, timestamps = {} }) {
             }
         >
             {STEPS.map(({ key, label }, i) => {
+                const displayLabel = labelsOverride?.[key] || label;
                 const active = idxS === i;
                 const passed = idxS > i;
                 const ts = timestamps?.[key];
-                const tip = ts ? new Date(ts).toLocaleString() : label;
+                const tip = ts ? new Date(ts).toLocaleString() : displayLabel;
 
                 // Circle styles
                 const circleBase =
@@ -58,7 +64,7 @@ export function BookingSteps({ status, compact = false, timestamps = {} }) {
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <span
-                                    aria-label={label}
+                                    aria-label={displayLabel}
                                     className={`${circleBase} ${circleCls}`}
                                 />
                             </TooltipTrigger>
