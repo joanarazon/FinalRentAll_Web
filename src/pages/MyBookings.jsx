@@ -18,7 +18,13 @@ import {
     DialogTrigger,
     DialogFooter,
 } from "@/components/ui/dialog";
-import { getExistingLessorReview, saveLessorReview } from "@/lib/reviews";
+import {
+    getExistingLessorReview,
+    saveLessorReview,
+    getExistingItemReview,
+    saveItemReview,
+    getExistingLessorReviewForLessor,
+} from "@/lib/reviews";
 import ReportDialog from "@/components/ReportDialog";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -543,7 +549,12 @@ function ActionBar({ tabKey, rental, user, onChanged, categories }) {
             }
         }
     } else if (tabKey === "completed") {
-        primary = <RateLessorButton rental={rental} />;
+        primary = (
+            <div className="flex gap-2">
+                <RateLessorButton rental={rental} />
+                <RateItemButton rental={rental} />
+            </div>
+        );
     }
 
     return (
@@ -941,10 +952,19 @@ function RateLessorButton({ rental }) {
         (async () => {
             try {
                 setLoading(true);
-                const data = await getExistingLessorReview(
-                    rental.rental_id,
-                    user?.id
-                );
+                const lessorId = rental?.items?.user_id;
+                let data = null;
+                if (lessorId) {
+                    data = await getExistingLessorReviewForLessor(
+                        lessorId,
+                        user?.id
+                    );
+                } else {
+                    data = await getExistingLessorReview(
+                        rental.rental_id,
+                        user?.id
+                    );
+                }
                 setExisting(data);
                 setRating(Number(data?.rating || 0));
                 setComment(data?.comment || "");
@@ -954,7 +974,7 @@ function RateLessorButton({ rental }) {
                 setLoading(false);
             }
         })();
-    }, [open, rental?.rental_id, user?.id]);
+    }, [open, rental?.rental_id, rental?.items?.user_id, user?.id]);
 
     const submit = async (e) => {
         e?.preventDefault?.();
@@ -1016,6 +1036,128 @@ function RateLessorButton({ rental }) {
                         value={comment}
                         onChange={(e) => setComment(e.target.value)}
                         placeholder="Share your experience with this lessor..."
+                        className="w-full border border-[#1E1E1E]/20 rounded-lg p-3 text-sm text-[#1E1E1E] focus:outline-none focus:ring-2 focus:ring-[#FFAB00] transition-all"
+                        rows={4}
+                    />
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="cursor-pointer bg-transparent"
+                            onClick={() => setOpen(false)}
+                            disabled={loading}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={loading || !rating}
+                            className="bg-[#FFAB00] text-[#1E1E1E] hover:bg-[#FFAB00]/90 font-semibold"
+                        >
+                            {loading
+                                ? "Saving..."
+                                : existing
+                                ? "Update"
+                                : "Submit"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function RateItemButton({ rental }) {
+    const user = useUser();
+    const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [existing, setExisting] = useState(null);
+    const [rating, setRating] = useState(0);
+    const [comment, setComment] = useState("");
+    const toast = useToastApi();
+
+    useEffect(() => {
+        if (!open) return;
+        (async () => {
+            try {
+                setLoading(true);
+                const data = await getExistingItemReview(
+                    rental.rental_id,
+                    user?.id
+                );
+                setExisting(data);
+                setRating(Number(data?.rating || 0));
+                setComment(data?.comment || "");
+            } catch (e) {
+                // ignore
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, [open, rental?.rental_id, user?.id]);
+
+    const submit = async (e) => {
+        e?.preventDefault?.();
+        if (!user?.id) return;
+        if (!rating) return;
+        try {
+            setLoading(true);
+            const { updated } = await saveItemReview({
+                rentalId: rental.rental_id,
+                reviewerId: user.id,
+                rating,
+                comment,
+            });
+            toast.success(
+                updated ? "Item review updated" : "Item review submitted"
+            );
+            setOpen(false);
+        } catch (err) {
+            toast.error(err.message || "Could not save item review");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer border-[#1E1E1E]/30 text-[#1E1E1E] hover:bg-[#FFAB00]/10 bg-transparent"
+                >
+                    {existing ? "Edit item review" : "Rate item"}
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-white">
+                <DialogHeader>
+                    <DialogTitle className="text-[#1E1E1E]">
+                        Rate item
+                    </DialogTitle>
+                </DialogHeader>
+                <form onSubmit={submit} className="space-y-4">
+                    <div className="flex items-center gap-2">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                            <button
+                                type="button"
+                                key={n}
+                                onClick={() => setRating(n)}
+                                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold transition-all ${
+                                    n <= rating
+                                        ? "bg-[#FFAB00] border-[#FFAB00] text-[#1E1E1E] scale-110"
+                                        : "bg-white border-[#1E1E1E]/20 text-[#1E1E1E]/40 hover:border-[#FFAB00]/50"
+                                }`}
+                                aria-label={`${n} star`}
+                            >
+                                {n}
+                            </button>
+                        ))}
+                    </div>
+                    <textarea
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                        placeholder="Share your experience with this item..."
                         className="w-full border border-[#1E1E1E]/20 rounded-lg p-3 text-sm text-[#1E1E1E] focus:outline-none focus:ring-2 focus:ring-[#FFAB00] transition-all"
                         rows={4}
                     />

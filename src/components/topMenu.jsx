@@ -7,10 +7,11 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useUser } from "../hooks/useUser";
-import { Heart, Menu } from "lucide-react";
-import { useState } from "react";
+import { Heart, Menu, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUserContext } from "../context/UserContext.jsx";
+import { supabase } from "../../supabaseClient";
 
 export default function TopMenu({
     activePage,
@@ -20,6 +21,10 @@ export default function TopMenu({
 }) {
     const user = useUser();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [suggestions, setSuggestions] = useState({ users: [], items: [] });
+    const [showSuggest, setShowSuggest] = useState(false);
+    const inputRef = useRef(null);
+    const [favoritesCount, setFavoritesCount] = useState(0);
     const navigate = useNavigate();
     const { logout } = useUserContext();
 
@@ -41,6 +46,98 @@ export default function TopMenu({
                 ? "text-black font-bold underline underline-offset-4 decoration-2"
                 : ""
         }`;
+
+    // Debounced search suggestions (users + items)
+    useEffect(() => {
+        let ac = new AbortController();
+        const term = (searchTerm || "").trim();
+        if (!term || term.length < 2) {
+            setSuggestions({ users: [], items: [] });
+            return;
+        }
+        const t = setTimeout(async () => {
+            try {
+                // Users by first/last name
+                const usersPromise = supabase
+                    .from("users")
+                    .select("id, first_name, last_name, profile_pic_url")
+                    .or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%`)
+                    .limit(5);
+
+                // Items by title/description/location and available/approved
+                const itemsPromise = supabase
+                    .from("items")
+                    .select(
+                        "item_id,title,description,location,item_status,available"
+                    )
+                    .or(
+                        `title.ilike.%${term}%,description.ilike.%${term}%,location.ilike.%${term}%`
+                    )
+                    .eq("available", true)
+                    .limit(5);
+
+                const [{ data: uRows }, { data: iRows }] = await Promise.all([
+                    usersPromise,
+                    itemsPromise,
+                ]);
+                setSuggestions({ users: uRows || [], items: iRows || [] });
+            } catch (_) {
+                setSuggestions({ users: [], items: [] });
+            }
+        }, 200);
+        return () => {
+            ac.abort();
+            clearTimeout(t);
+        };
+    }, [searchTerm]);
+
+    // Favorites badge count
+    useEffect(() => {
+        let active = true;
+        const load = async () => {
+            if (!user?.id) {
+                if (active) setFavoritesCount(0);
+                return;
+            }
+            try {
+                const { count } = await supabase
+                    .from("favorites")
+                    .select("id", { count: "exact", head: true })
+                    .eq("user_id", user.id);
+                if (active) setFavoritesCount(Number(count || 0));
+            } catch (_) {
+                if (active) setFavoritesCount(0);
+            }
+        };
+        load();
+        const channel = supabase
+            .channel("favorites_changes")
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "public", table: "favorites" },
+                (payload) => {
+                    if (payload.new?.user_id === user?.id) {
+                        setFavoritesCount((c) => c + 1);
+                    }
+                }
+            )
+            .on(
+                "postgres_changes",
+                { event: "DELETE", schema: "public", table: "favorites" },
+                (payload) => {
+                    if (payload.old?.user_id === user?.id) {
+                        setFavoritesCount((c) => Math.max(0, c - 1));
+                    }
+                }
+            )
+            .subscribe();
+        return () => {
+            active = false;
+            try {
+                supabase.removeChannel(channel);
+            } catch (_) {}
+        };
+    }, [user?.id]);
 
     return (
         <div className="bg-[#FFFBF2] shadow-md px-4 py-3 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-0">
@@ -158,20 +255,121 @@ export default function TopMenu({
 
             {/* Right: Search + Heart + Avatar */}
             <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto mt-2 md:mt-0">
-                <input
-                    type="text"
-                    placeholder="Search..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="flex-1 md:flex-none px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring focus:border-blue-500"
-                />
+                <div className="relative w-full md:w-auto">
+                    <div className="flex items-center gap-2 px-3 py-2 border rounded-lg shadow-sm bg-white focus-within:ring focus-within:border-blue-500">
+                        <Search className="w-4 h-4 text-gray-400" />
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            placeholder="Search items or users..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onFocus={() => setShowSuggest(true)}
+                            onBlur={() =>
+                                setTimeout(() => setShowSuggest(false), 150)
+                            }
+                            className="w-full outline-none"
+                        />
+                    </div>
+                    {showSuggest &&
+                        (suggestions.users.length > 0 ||
+                            suggestions.items.length > 0) && (
+                            <div className="absolute z-40 mt-2 w-full md:w-[28rem] bg-white border border-gray-200 rounded-lg shadow-lg p-2 max-h-80 overflow-auto">
+                                {suggestions.users.length > 0 && (
+                                    <div className="mb-2">
+                                        <div className="px-2 py-1 text-xs uppercase text-gray-400 font-semibold">
+                                            Users
+                                        </div>
+                                        <ul>
+                                            {suggestions.users.map((u) => (
+                                                <li key={u.id}>
+                                                    <button
+                                                        className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-md flex items-center gap-2 cursor-pointer"
+                                                        onMouseDown={(e) =>
+                                                            e.preventDefault()
+                                                        }
+                                                        onClick={() =>
+                                                            navigate(
+                                                                `/profile/${u.id}`
+                                                            )
+                                                        }
+                                                    >
+                                                        <div className="h-6 w-6 rounded-full bg-gray-200 overflow-hidden">
+                                                            {u.profile_pic_url ? (
+                                                                <img
+                                                                    src={
+                                                                        u.profile_pic_url
+                                                                    }
+                                                                    alt=""
+                                                                    className="h-full w-full object-cover"
+                                                                />
+                                                            ) : null}
+                                                        </div>
+                                                        <span className="text-sm text-gray-800">
+                                                            {(
+                                                                u.first_name ||
+                                                                ""
+                                                            ).trim()}{" "}
+                                                            {(
+                                                                u.last_name ||
+                                                                ""
+                                                            ).trim()}
+                                                        </span>
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                                {suggestions.items.length > 0 && (
+                                    <div>
+                                        <div className="px-2 py-1 text-xs uppercase text-gray-400 font-semibold">
+                                            Items
+                                        </div>
+                                        <ul>
+                                            {suggestions.items.map((it) => (
+                                                <li key={it.item_id}>
+                                                    <button
+                                                        className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-md cursor-pointer"
+                                                        onMouseDown={(e) =>
+                                                            e.preventDefault()
+                                                        }
+                                                        onClick={() =>
+                                                            navigate(
+                                                                `/home?q=${encodeURIComponent(
+                                                                    it.title ||
+                                                                        ""
+                                                                )}`
+                                                            )
+                                                        }
+                                                    >
+                                                        <span className="text-sm text-gray-800">
+                                                            {it.title}
+                                                        </span>
+                                                        {it.location && (
+                                                            <span className="text-xs text-gray-500 ml-2">
+                                                                • {it.location}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                </div>
                 <div className="relative">
-                    <Button variant="ghost">
+                    <Button
+                        variant="ghost"
+                        onClick={() => navigate("/favorites")}
+                    >
                         <Heart className="text-gray-500 w-5 h-5 md:w-6 md:h-6" />
                     </Button>
-                    {favorites.length > 0 && (
+                    {(favorites?.length ?? favoritesCount) > 0 && (
                         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full px-1">
-                            {favorites.length}
+                            {favorites?.length ?? favoritesCount}
                         </span>
                     )}
                 </div>

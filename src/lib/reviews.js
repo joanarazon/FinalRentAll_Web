@@ -66,6 +66,25 @@ export async function getExistingLessorReview(rentalId, reviewerId) {
 }
 
 /**
+ * Find an existing lessor review by (lessorId, reviewerId), regardless of rental.
+ */
+export async function getExistingLessorReviewForLessor(lessorId, reviewerId) {
+    if (!lessorId || !reviewerId) return null;
+    const { data, error } = await supabase
+        .from("lessor_reviews")
+        .select(
+            "review_id, rental_id, lessor_id, reviewer_id, rating, comment, created_at"
+        )
+        .eq("lessor_id", lessorId)
+        .eq("reviewer_id", reviewerId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (error) throw error;
+    return data || null;
+}
+
+/**
  * Create a lessor review after a successful (completed) booking.
  * Validates the rental and reviewer, prevents duplicate per rental.
  *
@@ -88,8 +107,11 @@ export async function rateLessor({ rentalId, reviewerId, rating, comment }) {
     );
     if (!canRate) throw new Error(reason || "Not allowed to rate this lessor");
 
-    // Prevent duplicate reviews by the same reviewer for the same rental
-    const existing = await getExistingLessorReview(rentalId, reviewerId);
+    // Prevent duplicate reviews by the same reviewer for the same lessor (across rentals)
+    const existing = await getExistingLessorReviewForLessor(
+        lessorId,
+        reviewerId
+    );
     if (existing) {
         return { review: existing, alreadyReviewed: true };
     }
@@ -148,7 +170,11 @@ export async function saveLessorReview({
     );
     if (!canRate) throw new Error(reason || "Not allowed to rate this lessor");
 
-    const existing = await getExistingLessorReview(rentalId, reviewerId);
+    // Enforce one review per lessor per reviewer across all rentals
+    const existing = await getExistingLessorReviewForLessor(
+        lessorId,
+        reviewerId
+    );
     if (existing) {
         const { data, error } = await supabase
             .from("lessor_reviews")
@@ -212,4 +238,92 @@ export async function getLessorRatingStats(lessorId) {
     }
     const average = sum / total;
     return { average: Number.isFinite(average) ? average : 0, count: total };
+}
+
+// -----------------------------------------
+// Item reviews (table: reviews)
+// -----------------------------------------
+
+/**
+ * Validate renter can rate the item for a given rental.
+ */
+export async function canRateItem(rentalId, reviewerId) {
+    if (!rentalId || !reviewerId) {
+        return { canRate: false, reason: "Missing rentalId or reviewerId" };
+    }
+    const { data: rental, error } = await supabase
+        .from("rental_transactions")
+        .select("rental_id, renter_id, status, item_id")
+        .eq("rental_id", rentalId)
+        .single();
+    if (error) {
+        return { canRate: false, reason: error.message };
+    }
+    if (!rental) return { canRate: false, reason: "Rental not found" };
+    if (rental.status !== "completed")
+        return { canRate: false, reason: "Rental not completed yet" };
+    if (rental.renter_id !== reviewerId)
+        return { canRate: false, reason: "Only renter can rate item" };
+    if (!rental.item_id)
+        return { canRate: false, reason: "Item not found for rental" };
+    return { canRate: true, itemId: rental.item_id, rental };
+}
+
+/**
+ * Get existing item review by (rentalId, reviewerId)
+ */
+export async function getExistingItemReview(rentalId, reviewerId) {
+    const { data, error } = await supabase
+        .from("reviews")
+        .select(
+            "review_id, rental_id, item_id, reviewer_id, rating, comment, created_at"
+        )
+        .eq("rental_id", rentalId)
+        .eq("reviewer_id", reviewerId)
+        .limit(1)
+        .maybeSingle();
+    if (error) throw error;
+    return data || null;
+}
+
+/**
+ * Create or update item review for a rental.
+ */
+export async function saveItemReview({
+    rentalId,
+    reviewerId,
+    rating,
+    comment,
+}) {
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        throw new Error("Rating must be an integer between 1 and 5");
+    }
+    const { canRate, reason, itemId } = await canRateItem(rentalId, reviewerId);
+    if (!canRate) throw new Error(reason || "Not allowed to rate this item");
+
+    const existing = await getExistingItemReview(rentalId, reviewerId);
+    if (existing) {
+        const { data, error } = await supabase
+            .from("reviews")
+            .update({ rating, comment: comment || null })
+            .eq("review_id", existing.review_id)
+            .select("*")
+            .single();
+        if (error) throw error;
+        return { review: data, updated: true };
+    }
+
+    const { data, error } = await supabase
+        .from("reviews")
+        .insert({
+            rental_id: rentalId,
+            item_id: itemId,
+            reviewer_id: reviewerId,
+            rating,
+            comment: comment || null,
+        })
+        .select("*")
+        .single();
+    if (error) throw error;
+    return { review: data, updated: false };
 }
