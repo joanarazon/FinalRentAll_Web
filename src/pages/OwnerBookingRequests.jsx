@@ -75,7 +75,17 @@ const BOOKING_TABS = [
     {
         key: "returned",
         label: "Returned/Checkout",
-        tip: "Confirm returns or checkouts and restock items.",
+        tip: "Confirm returns/checkouts, optionally place on hold for maintenance, or restock now.",
+    },
+    {
+        key: "onHold",
+        label: "On Hold",
+        tip: "Items held for maintenance before restocking.",
+    },
+    {
+        key: "completed",
+        label: "Completed",
+        tip: "Historical rentals that have been restocked.",
     },
     { key: "cancelled", label: "Cancelled/Rejected", tip: null },
     { key: "expired", label: "Expired", tip: null },
@@ -113,6 +123,7 @@ export default function OwnerBookingRequests({
     }, [awaitingDepositOwner, deposits]);
     const [enRoute, setEnRoute] = useState([]);
     const [cancelled, setCancelled] = useState([]);
+    const [completed, setCompleted] = useState([]);
     const [loading, setLoading] = useState(false);
     const [actionId, setActionId] = useState(null);
     const [proofOpen, setProofOpen] = useState(false);
@@ -145,7 +156,7 @@ export default function OwnerBookingRequests({
             const { data: ret, error: e2 } = await supabase
                 .from("rental_transactions")
                 .select(
-                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,renter_return_marked_at,
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,renter_return_marked_at,owner_confirmed_at,
            items!inner(title,user_id,main_image_url),
            renter:renter_id ( first_name,last_name )`
                 )
@@ -239,6 +250,21 @@ export default function OwnerBookingRequests({
                 .order("start_date", { ascending: true });
             if (e7) throw e7;
             setEnRoute(onw || []);
+
+            const { data: done, error: e8 } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `rental_id,item_id,renter_id,start_date,end_date,total_cost,status,quantity,owner_confirmed_at,
+           items!inner(title,user_id,main_image_url),
+           renter:renter_id ( first_name,last_name )`
+                )
+                .eq("items.user_id", user.id)
+                .eq("status", "completed")
+                .neq("renter_id", user.id)
+                .order("owner_confirmed_at", { ascending: false })
+                .order("end_date", { ascending: false });
+            if (e8) throw e8;
+            setCompleted(done || []);
         } catch (e) {
             console.error("Load owner requests failed:", e.message);
         } finally {
@@ -444,13 +470,17 @@ export default function OwnerBookingRequests({
 
     if (!user) return <div className="p-6">Loading...</div>;
 
+    const returnedList = (awaiting || []).filter((r) => !r.owner_confirmed_at);
+    const onHoldList = (awaiting || []).filter((r) => !!r.owner_confirmed_at);
     const grouped = {
         pending: rows,
         confirmed: awaitingDepositOwner,
         deposit: combinedDeposits,
         onTheWay: enRoute,
         ongoing: ongoing,
-        returned: awaiting,
+        returned: returnedList,
+        onHold: onHoldList,
+        completed: completed,
         cancelled: cancelled,
         expired: expired,
     };
@@ -648,7 +678,22 @@ function BookingCard({
                             {rental.items?.title || "Item"}
                         </span>
                     </CardTitle>
-                    <StatusBadge status={rental.status} />
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
+                            <StatusBadge status={rental.status} />
+                            {(tabKey === "returned" || tabKey === "onHold") &&
+                                rental.owner_confirmed_at && (
+                                    <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                                        On hold
+                                    </Badge>
+                                )}
+                        </div>
+                        {tabKey === "returned" && rental.owner_confirmed_at && (
+                            <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                                On hold
+                            </Badge>
+                        )}
+                    </div>
                 </div>
             </CardHeader>
             <CardContent className="text-sm space-y-5">
@@ -885,6 +930,36 @@ function ActionBar({
                                 </Button>
                             </>
                         )}
+                        <Button
+                            size="sm"
+                            variant="destructive"
+                            className="cursor-pointer"
+                            disabled={isLoading}
+                            onClick={() => onReportIssue(rental.rental_id)}
+                        >
+                            {isLoading ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                "Report Issue"
+                            )}
+                        </Button>
+                    </>
+                )}
+
+                {tabKey === "onHold" && (
+                    <>
+                        <Button
+                            size="sm"
+                            className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
+                            disabled={isLoading}
+                            onClick={() => onConfirmReturn(rental.rental_id)}
+                        >
+                            {isLoading ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                "Restock Now"
+                            )}
+                        </Button>
                         <Button
                             size="sm"
                             variant="destructive"

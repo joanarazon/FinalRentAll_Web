@@ -118,7 +118,7 @@ export default function MyBookings() {
                 const { data, error } = await supabase
                     .from("rental_transactions")
                     .select(
-                        `rental_id,item_id,start_date,end_date,total_cost,status,quantity,proof_of_deposit_url,
+                        `rental_id,item_id,start_date,end_date,total_cost,status,quantity,proof_of_deposit_url,owner_confirmed_at,
              renter:renter_id ( first_name, last_name ),
              items (
                title,
@@ -205,7 +205,7 @@ export default function MyBookings() {
             const { data, error } = await supabase
                 .from("rental_transactions")
                 .select(
-                    `rental_id,item_id,start_date,end_date,total_cost,status,quantity,proof_of_deposit_url,
+                    `rental_id,item_id,start_date,end_date,total_cost,status,quantity,proof_of_deposit_url,owner_confirmed_at,
              renter:renter_id ( first_name, last_name ),
              items (
                title,
@@ -393,9 +393,18 @@ export default function MyBookings() {
                                                             "Item"}
                                                     </span>
                                                 </CardTitle>
-                                                <StatusBadge
-                                                    status={r.status}
-                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <StatusBadge
+                                                        status={r.status}
+                                                    />
+                                                    {String(r.status) ===
+                                                        "awaiting_owner_confirmation" &&
+                                                        r.owner_confirmed_at && (
+                                                            <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                                                                On hold
+                                                            </Badge>
+                                                        )}
+                                                </div>
                                             </div>
                                         </CardHeader>
                                         <CardContent className="text-sm space-y-5">
@@ -518,13 +527,13 @@ function ActionBar({ tabKey, rental, user, onChanged, categories }) {
         }
     } else if (tabKey === "onTheWay") {
         // For accommodation, go straight to ongoing with renter check-in
-        if (isAccommodation(rental.items?.category_id)) {
+        if (isAccommodationAny(rental.items?.category_id, categories || [])) {
             primary = <MarkCheckIn rental={rental} onChanged={onChanged} />;
         } else {
             primary = <MarkReceived rental={rental} onChanged={onChanged} />;
         }
     } else if (tabKey === "ongoing") {
-        if (isAccommodation(rental.items?.category_id)) {
+        if (isAccommodationAny(rental.items?.category_id, categories || [])) {
             primary = <MarkCheckout rental={rental} onChanged={onChanged} />;
         } else {
             if (isEligibleReturn(rental)) {
@@ -1158,6 +1167,20 @@ function DetailsModal({ rental, user, categories }) {
                             </span>
                             <StatusBadge status={rental.status} />
                         </div>
+                        {String(rental.status) ===
+                            "awaiting_owner_confirmation" &&
+                            rental.owner_confirmed_at && (
+                                <div className="flex justify-between">
+                                    <span className="text-[#1E1E1E]/60 font-medium">
+                                        Hold
+                                    </span>
+                                    <span className="text-[#1E1E1E] font-semibold text-xs">
+                                        {new Date(
+                                            rental.owner_confirmed_at
+                                        ).toLocaleString()}
+                                    </span>
+                                </div>
+                            )}
                         <div className="flex justify-between items-center pt-2 border-t border-[#1E1E1E]/10">
                             <span className="text-[#1E1E1E] font-bold">
                                 Total
