@@ -26,6 +26,7 @@ import NotAuthorized from "./pages/NotAuthorized.jsx";
 import MyBookings from "./pages/MyBookings";
 import MyRatings from "./pages/MyRatings";
 import Profile from "./pages/Profile";
+import Favorites from "./pages/Favorites.jsx";
 import { useUserContext } from "./context/UserContext.jsx";
 import Loading from "./components/Loading.jsx";
 import PendingVerification from "./pages/PendingVerification.jsx";
@@ -83,6 +84,7 @@ export default function App() {
                     <Route path="/my-ratings" element={<MyRatings />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/profile/:id" element={<Profile />} />
+                    <Route path="/favorites" element={<Favorites />} />
                 </Route>
                 {/* Admin group */}
                 <Route
