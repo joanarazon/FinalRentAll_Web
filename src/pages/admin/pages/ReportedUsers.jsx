@@ -27,13 +27,12 @@ export default function ReportedUsers() {
         setLoading(true);
         try {
             let query = supabase
-                .from("complaints")
+                .from("user_complaints")
                 .select(
-                    `complaint_id, sender_id, target_user_id, target_item_id, rental_id, reason, content, sent_at, status,
-                     sender:users!complaints_sender_id_fkey(id, first_name, last_name),
-                     target_user:users!complaints_target_user_id_fkey(id, first_name, last_name, profile_pic_url)`
+                    `complaint_id, sender_id, target_user_id, rental_id, reason, content, sent_at, status,
+                     sender:users!user_complaints_sender_id_fkey(id, first_name, last_name),
+                     target_user:users!user_complaints_target_user_id_fkey(id, first_name, last_name, profile_pic_url)`
                 )
-                .not("target_user_id", "is", null)
                 .order("sent_at", { ascending: false });
             if (statusFilter && statusFilter !== "all") {
                 query = query.eq("status", statusFilter);
@@ -58,7 +57,7 @@ export default function ReportedUsers() {
         setResolvingId(complaintId);
         try {
             const { error } = await supabase
-                .from("complaints")
+                .from("user_complaints")
                 .update({
                     status: "resolved",
                     resolved_by: admin.id,

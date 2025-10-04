@@ -29,7 +29,7 @@ export default function ReportedItems() {
             let query = supabase
                 .from("complaints")
                 .select(
-                    `complaint_id, sender_id, target_user_id, target_item_id, rental_id, reason, content, sent_at, status,
+                    `complaint_id, sender_id, target_item_id, rental_id, reason, content, sent_at, status,
                      sender:users!complaints_sender_id_fkey(id, first_name, last_name),
                      item:items!complaints_target_item_id_fkey(item_id, title, user_id)`
                 )
