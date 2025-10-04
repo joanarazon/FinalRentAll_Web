@@ -535,3 +535,5 @@ function Home() {
 }
 
 export default Home;
+
+//added search filter
