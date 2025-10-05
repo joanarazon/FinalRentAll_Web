@@ -7,26 +7,25 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useUser } from "../hooks/useUser";
-import { Heart, Menu, Search } from "lucide-react";
+import { Heart, Menu, Search, Bell } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUserContext } from "../context/UserContext.jsx";
+import { useNotifications } from "../context/NotificationContext.jsx";
+import { useFavorites } from "../context/FavoritesContext.jsx";
+import { Badge } from "./ui/badge";
 import { supabase } from "../../supabaseClient";
 
-export default function TopMenu({
-    activePage,
-    favorites = [],
-    searchTerm,
-    setSearchTerm,
-}) {
+export default function TopMenu({ activePage, searchTerm, setSearchTerm }) {
     const user = useUser();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [suggestions, setSuggestions] = useState({ users: [], items: [] });
     const [showSuggest, setShowSuggest] = useState(false);
     const inputRef = useRef(null);
-    const [favoritesCount, setFavoritesCount] = useState(0);
     const navigate = useNavigate();
     const { logout } = useUserContext();
+    const { unreadCount } = useNotifications();
+    const { favoritesCount } = useFavorites();
 
     const handleInbox = () => {
         navigate("/inbox");
@@ -91,54 +90,6 @@ export default function TopMenu({
         };
     }, [searchTerm]);
 
-    // Favorites badge count
-    useEffect(() => {
-        let active = true;
-        const load = async () => {
-            if (!user?.id) {
-                if (active) setFavoritesCount(0);
-                return;
-            }
-            try {
-                const { count } = await supabase
-                    .from("favorites")
-                    .select("id", { count: "exact", head: true })
-                    .eq("user_id", user.id);
-                if (active) setFavoritesCount(Number(count || 0));
-            } catch (_) {
-                if (active) setFavoritesCount(0);
-            }
-        };
-        load();
-        const channel = supabase
-            .channel("favorites_changes")
-            .on(
-                "postgres_changes",
-                { event: "INSERT", schema: "public", table: "favorites" },
-                (payload) => {
-                    if (payload.new?.user_id === user?.id) {
-                        setFavoritesCount((c) => c + 1);
-                    }
-                }
-            )
-            .on(
-                "postgres_changes",
-                { event: "DELETE", schema: "public", table: "favorites" },
-                (payload) => {
-                    if (payload.old?.user_id === user?.id) {
-                        setFavoritesCount((c) => Math.max(0, c - 1));
-                    }
-                }
-            )
-            .subscribe();
-        return () => {
-            active = false;
-            try {
-                supabase.removeChannel(channel);
-            } catch (_) {}
-        };
-    }, [user?.id]);
-
     return (
         <div className="bg-[#FFFBF2] shadow-md px-4 py-3 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-0">
             {/* Left: Logo + Links */}
@@ -186,10 +137,19 @@ export default function TopMenu({
                         variant="link"
                         className={`${linkClass(
                             "notifications"
-                        )} cursor-pointer`}
+                        )} cursor-pointer relative`}
                         onClick={handleNotification}
                     >
+                        <Bell className="h-4 w-4 mr-2" />
                         Notifications
+                        {unreadCount > 0 && (
+                            <Badge
+                                variant="destructive"
+                                className="absolute -top-1 -right-1 text-xs min-w-[1.25rem] h-5 px-1"
+                            >
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                            </Badge>
+                        )}
                     </Button>
                 </div>
 
@@ -245,10 +205,19 @@ export default function TopMenu({
                         variant="link"
                         className={`${linkClass(
                             "notifications"
-                        )} cursor-pointer`}
+                        )} cursor-pointer relative`}
                         onClick={handleNotification}
                     >
+                        <Bell className="h-4 w-4 mr-2" />
                         Notifications
+                        {unreadCount > 0 && (
+                            <Badge
+                                variant="destructive"
+                                className="absolute -top-1 -right-1 text-xs min-w-[1.25rem] h-5 px-1"
+                            >
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                            </Badge>
+                        )}
                     </Button>
                 </div>
             )}
@@ -364,12 +333,21 @@ export default function TopMenu({
                     <Button
                         variant="ghost"
                         onClick={() => navigate("/favorites")}
+                        className={
+                            activePage === "favorites" ? "bg-gray-100" : ""
+                        }
                     >
-                        <Heart className="text-gray-500 w-5 h-5 md:w-6 md:h-6" />
+                        <Heart
+                            className={`w-5 h-5 md:w-6 md:h-6 ${
+                                activePage === "favorites"
+                                    ? "text-red-500 fill-red-500"
+                                    : "text-gray-500"
+                            }`}
+                        />
                     </Button>
-                    {(favorites?.length ?? favoritesCount) > 0 && (
+                    {favoritesCount > 0 && (
                         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full px-1">
-                            {favorites?.length ?? favoritesCount}
+                            {favoritesCount}
                         </span>
                     )}
                 </div>

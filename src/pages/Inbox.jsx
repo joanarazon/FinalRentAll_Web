@@ -8,6 +8,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 function Inbox({ favorites, searchTerm, setSearchTerm }) {
     const [inboxSearch, setInboxSearch] = useState("");
+
+    // Sync TopMenu search with local inbox search
+    useEffect(() => {
+        if (searchTerm !== inboxSearch) {
+            setInboxSearch(searchTerm || "");
+        }
+    }, [searchTerm]);
+
+    // Sync local search back to TopMenu
+    useEffect(() => {
+        if (setSearchTerm && inboxSearch !== searchTerm) {
+            setSearchTerm(inboxSearch);
+        }
+    }, [inboxSearch, setSearchTerm]);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();

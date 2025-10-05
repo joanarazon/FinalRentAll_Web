@@ -29,6 +29,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import ReportDialog from "@/components/ReportDialog";
+import { handleBookingStatusChange } from "../lib/notificationEvents";
 
 function StatusBadge({ status }) {
     const s = String(status || "").toLowerCase();
@@ -280,6 +281,21 @@ export default function OwnerBookingRequests({
     const approve = async (txId) => {
         setActionId(txId);
         try {
+            // Get booking details before update
+            const { data: bookingBefore, error: fetchError } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `
+                    *,
+                    items!inner(title, user_id),
+                    renter:renter_id(first_name, last_name)
+                `
+                )
+                .eq("rental_id", txId)
+                .single();
+
+            if (fetchError) throw fetchError;
+
             const { error } = await supabase
                 .from("rental_transactions")
                 .update({ status: "confirmed" })
@@ -294,6 +310,30 @@ export default function OwnerBookingRequests({
                 throw error;
             } else {
                 toast.success("Request approved");
+
+                // Trigger notification
+                try {
+                    const ownerName =
+                        user.first_name && user.last_name
+                            ? `${user.first_name} ${user.last_name}`.trim()
+                            : "The owner";
+
+                    await handleBookingStatusChange(
+                        "pending",
+                        "confirmed",
+                        { ...bookingBefore, status: "confirmed" },
+                        bookingBefore.items,
+                        {
+                            renter: bookingBefore.renter,
+                            owner: { full_name: ownerName },
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error(
+                        "Failed to send approval notification:",
+                        notificationError
+                    );
+                }
             }
         } catch (e) {
             console.error("Approve failed:", e.message);
@@ -306,6 +346,21 @@ export default function OwnerBookingRequests({
     const confirmReturn = async (txId) => {
         setActionId(txId);
         try {
+            // Get booking details before update
+            const { data: bookingBefore, error: fetchError } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `
+                    *,
+                    items!inner(title, user_id),
+                    renter:renter_id(first_name, last_name)
+                `
+                )
+                .eq("rental_id", txId)
+                .single();
+
+            if (fetchError) throw fetchError;
+
             const { error } = await supabase
                 .from("rental_transactions")
                 .update({
@@ -321,6 +376,34 @@ export default function OwnerBookingRequests({
                 throw error;
             } else {
                 toast.success("Return confirmed. Rental completed.");
+
+                // Trigger notification
+                try {
+                    const ownerName =
+                        user.first_name && user.last_name
+                            ? `${user.first_name} ${user.last_name}`.trim()
+                            : "The owner";
+
+                    await handleBookingStatusChange(
+                        "awaiting_owner_confirmation",
+                        "completed",
+                        {
+                            ...bookingBefore,
+                            status: "completed",
+                            owner_id: bookingBefore.items.user_id, // Add owner_id from items.user_id
+                        },
+                        bookingBefore.items,
+                        {
+                            renter: bookingBefore.renter,
+                            owner: { full_name: ownerName },
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error(
+                        "Failed to send return confirmation notification:",
+                        notificationError
+                    );
+                }
             }
         } catch (e) {
             console.error("Confirm return failed:", e.message);
@@ -381,6 +464,21 @@ export default function OwnerBookingRequests({
     const reject = async (txId) => {
         setActionId(txId);
         try {
+            // Get booking details before update
+            const { data: bookingBefore, error: fetchError } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `
+                    *,
+                    items!inner(title, user_id),
+                    renter:renter_id(first_name, last_name)
+                `
+                )
+                .eq("rental_id", txId)
+                .single();
+
+            if (fetchError) throw fetchError;
+
             const { error } = await supabase
                 .from("rental_transactions")
                 .update({ status: "rejected" })
@@ -393,6 +491,30 @@ export default function OwnerBookingRequests({
                 throw error;
             } else {
                 toast.success("Request rejected");
+
+                // Trigger notification
+                try {
+                    const ownerName =
+                        user.first_name && user.last_name
+                            ? `${user.first_name} ${user.last_name}`.trim()
+                            : "The owner";
+
+                    await handleBookingStatusChange(
+                        "pending",
+                        "rejected",
+                        { ...bookingBefore, status: "rejected" },
+                        bookingBefore.items,
+                        {
+                            renter: bookingBefore.renter,
+                            owner: { full_name: ownerName },
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error(
+                        "Failed to send rejection notification:",
+                        notificationError
+                    );
+                }
             }
         } catch (e) {
             console.error("Reject failed:", e.message);
@@ -405,6 +527,21 @@ export default function OwnerBookingRequests({
     const verifyDeposit = async (txId) => {
         setActionId(txId);
         try {
+            // Get booking details before update
+            const { data: bookingBefore, error: fetchError } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `
+                    *,
+                    items!inner(title, user_id),
+                    renter:renter_id(first_name, last_name)
+                `
+                )
+                .eq("rental_id", txId)
+                .single();
+
+            if (fetchError) throw fetchError;
+
             const { error } = await supabase
                 .from("rental_transactions")
                 .update({ status: "on_the_way" })
@@ -417,6 +554,38 @@ export default function OwnerBookingRequests({
                 throw error;
             } else {
                 toast.success("Deposit verified. Marked as On the Way.");
+
+                // Trigger notification
+                try {
+                    const ownerName =
+                        user.first_name && user.last_name
+                            ? `${user.first_name} ${user.last_name}`.trim()
+                            : "The owner";
+
+                    // Debug logging for verification notification
+                    console.log("Deposit verification notification data:", {
+                        rental_id: bookingBefore.rental_id,
+                        renter_id: bookingBefore.renter_id,
+                        item_title: bookingBefore.items?.title,
+                        owner_name: ownerName,
+                    });
+
+                    await handleBookingStatusChange(
+                        "deposit_submitted",
+                        "on_the_way",
+                        { ...bookingBefore, status: "on_the_way" },
+                        bookingBefore.items,
+                        {
+                            renter: bookingBefore.renter,
+                            owner: { full_name: ownerName },
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error(
+                        "Failed to send deposit verification notification:",
+                        notificationError
+                    );
+                }
             }
         } catch (e) {
             console.error("Verify deposit failed:", e.message);
@@ -464,7 +633,28 @@ export default function OwnerBookingRequests({
 
     const currentTab =
         BOOKING_TABS.find((t) => t.key === activeTab) || BOOKING_TABS[0];
-    const currentData = grouped[activeTab] || [];
+    let currentData = grouped[activeTab] || [];
+
+    // Apply search filter if search term exists
+    if (searchTerm && searchTerm.trim()) {
+        const searchLower = searchTerm.toLowerCase().trim();
+        currentData = currentData.filter((booking) => {
+            const itemTitle = booking.items?.title || booking.item?.title || "";
+            const renterName = booking.renter
+                ? `${booking.renter.first_name || ""} ${
+                      booking.renter.last_name || ""
+                  }`.trim()
+                : "";
+            const status = booking.status || "";
+
+            return (
+                itemTitle.toLowerCase().includes(searchLower) ||
+                renterName.toLowerCase().includes(searchLower) ||
+                status.toLowerCase().includes(searchLower) ||
+                booking.rental_id?.toLowerCase().includes(searchLower)
+            );
+        });
+    }
 
     return (
         <div className="min-h-screen bg-[#FAF5EF]">

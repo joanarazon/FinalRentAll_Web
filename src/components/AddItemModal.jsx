@@ -132,7 +132,24 @@ export default function AddItemModal({
                 }
             }
 
-            // Step 3: Callback + UI reset
+            // Step 3: Send notification to user about submission
+            try {
+                const { ItemNotifications } = await import(
+                    "../lib/notifications"
+                );
+                await ItemNotifications.notifyItemSubmittedForReview(
+                    userId,
+                    itemId,
+                    form.title.trim()
+                );
+            } catch (notificationError) {
+                console.error(
+                    "Failed to send submission notification:",
+                    notificationError
+                );
+            }
+
+            // Step 4: Callback + UI reset
             onCreated?.({
                 item_id: itemId,
                 ...basePayload,
@@ -141,10 +158,10 @@ export default function AddItemModal({
             Swal.fire({
                 icon: "success",
                 title: "Item created",
-                text: `Item created successfully${
+                text: `Item created successfully and submitted for admin review${
                     publicUrl ? " (image uploaded)" : ""
                 }`,
-                timer: 2000,
+                timer: 3000,
                 showConfirmButton: false,
             });
 
