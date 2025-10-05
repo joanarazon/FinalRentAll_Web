@@ -8,11 +8,11 @@ import AddItemModal from "../components/AddItemModal";
 import { supabase } from "../../supabaseClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import BookItemModal from "../components/BookItemModal";
+import { useFavorites } from "../context/FavoritesContext.jsx";
 import { ChevronDown } from "lucide-react";
 
 function Home() {
     const user = useUser();
-    const [favorites, setFavorites] = useState([]);
     const [addOpen, setAddOpen] = useState(false);
     const [categories, setCategories] = useState([]); // {category_id, name}
     const [selectedCategoryId, setSelectedCategoryId] = useState("");
@@ -26,16 +26,7 @@ function Home() {
     const [priceRange, setPriceRange] = useState([0, 1000]);
     const [maxPrice, setMaxPrice] = useState(1000);
 
-    const toggleFavorite = (item) => {
-        setFavorites((prev) => {
-            const exists = prev.some((fav) => fav.title === item.title);
-            if (exists) {
-                return prev.filter((fav) => fav.title !== item.title);
-            } else {
-                return [...prev, item];
-            }
-        });
-    };
+    const { favorites, toggleFavorite, isFavorited } = useFavorites();
 
     const fetchCategories = useCallback(async () => {
         const { data, error } = await supabase
@@ -321,7 +312,6 @@ function Home() {
         <div className="bg-background min-h-screen">
             <TopMenu
                 activePage="home"
-                favorites={favorites}
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
             />
@@ -582,9 +572,6 @@ function Home() {
                     {!loading &&
                         filteredItems.length > 0 &&
                         filteredItems.map((item, index) => {
-                            const isFavorited = favorites.some(
-                                (fav) => fav.title === item.title
-                            );
                             return (
                                 <ItemCard
                                     key={index}
@@ -597,8 +584,10 @@ function Home() {
                                     quantity={item.quantity}
                                     imageUrl={item.imageUrl}
                                     isOwner={user?.id === item.ownerId}
-                                    isFavorited={isFavorited}
-                                    onHeartClick={() => toggleFavorite(item)}
+                                    isFavorited={isFavorited(item.raw?.item_id)}
+                                    onHeartClick={() =>
+                                        toggleFavorite(item.raw || item)
+                                    }
                                     onRentClick={() => {
                                         setSelectedItem(item.raw || item);
                                         setBookOpen(true);
