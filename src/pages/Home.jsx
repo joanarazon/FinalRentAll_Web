@@ -26,15 +26,49 @@ function Home() {
     const [priceRange, setPriceRange] = useState([0, 1000]);
     const [maxPrice, setMaxPrice] = useState(1000);
 
-    const toggleFavorite = (item) => {
-        setFavorites((prev) => {
-            const exists = prev.some((fav) => fav.title === item.title);
+    const toggleFavorite = async (item) => {
+        if (!user?.id) {
+            console.warn("User not authenticated, cannot toggle favorite");
+            return;
+        }
+
+        try {
+            const exists = favorites.some(
+                (fav) => fav.item_id === item.item_id
+            );
+
             if (exists) {
-                return prev.filter((fav) => fav.title !== item.title);
+                // Remove from favorites
+                const { error } = await supabase
+                    .from("favorites")
+                    .delete()
+                    .eq("user_id", user.id)
+                    .eq("item_id", item.item_id);
+
+                if (error) throw error;
+
+                // Update local state
+                setFavorites((prev) =>
+                    prev.filter((fav) => fav.item_id !== item.item_id)
+                );
             } else {
-                return [...prev, item];
+                // Add to favorites
+                const { error } = await supabase.from("favorites").insert([
+                    {
+                        user_id: user.id,
+                        item_id: item.item_id,
+                    },
+                ]);
+
+                if (error) throw error;
+
+                // Update local state
+                setFavorites((prev) => [...prev, item]);
             }
-        });
+        } catch (error) {
+            console.error("Failed to toggle favorite:", error);
+            // Could add toast notification here if desired
+        }
     };
 
     const fetchCategories = useCallback(async () => {
@@ -44,6 +78,49 @@ function Home() {
             .order("name");
         if (!error) setCategories(data || []);
     }, []);
+
+    const fetchFavorites = useCallback(async () => {
+        if (!user?.id) {
+            setFavorites([]);
+            return;
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from("favorites")
+                .select(
+                    `
+                    item_id,
+                    items!inner(
+                        item_id,
+                        user_id,
+                        title,
+                        description,
+                        price_per_day,
+                        deposit_fee,
+                        location,
+                        available,
+                        created_at,
+                        quantity,
+                        main_image_url,
+                        category_id
+                    )
+                `
+                )
+                .eq("user_id", user.id);
+
+            if (error) throw error;
+
+            // Extract items from the favorites relationship
+            const favoriteItems = (data || [])
+                .map((fav) => fav.items)
+                .filter(Boolean);
+            setFavorites(favoriteItems);
+        } catch (error) {
+            console.error("Failed to fetch favorites:", error);
+            setFavorites([]);
+        }
+    }, [user?.id]);
 
     const getImageUrl = async (userId, itemId) => {
         try {
@@ -257,6 +334,10 @@ function Home() {
     }, [fetchItems]);
 
     useEffect(() => {
+        fetchFavorites();
+    }, [fetchFavorites]);
+
+    useEffect(() => {
         const channel = supabase
             .channel("items_changes")
             .on(
@@ -289,6 +370,31 @@ function Home() {
             supabase.removeChannel(rentalsChannel);
         };
     }, [fetchItems]);
+
+    useEffect(() => {
+        if (!user?.id) return;
+
+        const favoritesChannel = supabase
+            .channel("favorites_changes")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "favorites" },
+                (payload) => {
+                    // Only refresh if the change affects this user
+                    if (
+                        payload.new?.user_id === user.id ||
+                        payload.old?.user_id === user.id
+                    ) {
+                        fetchFavorites();
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(favoritesChannel);
+        };
+    }, [user?.id, fetchFavorites]);
 
     const uniqueLocations = [
         ...new Set(items.map((item) => item.location).filter(Boolean)),
@@ -583,7 +689,7 @@ function Home() {
                         filteredItems.length > 0 &&
                         filteredItems.map((item, index) => {
                             const isFavorited = favorites.some(
-                                (fav) => fav.title === item.title
+                                (fav) => fav.item_id === item.raw.item_id
                             );
                             return (
                                 <ItemCard
@@ -598,7 +704,9 @@ function Home() {
                                     imageUrl={item.imageUrl}
                                     isOwner={user?.id === item.ownerId}
                                     isFavorited={isFavorited}
-                                    onHeartClick={() => toggleFavorite(item)}
+                                    onHeartClick={() =>
+                                        toggleFavorite(item.raw || item)
+                                    }
                                     onRentClick={() => {
                                         setSelectedItem(item.raw || item);
                                         setBookOpen(true);
