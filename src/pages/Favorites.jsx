@@ -1,49 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 import TopMenu from "../components/topMenu";
 import ItemCard from "../components/ItemCard";
-import { supabase } from "../../supabaseClient";
 import { useUser } from "../hooks/useUser";
+import { useFavorites } from "../context/FavoritesContext.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 
 export default function Favorites() {
     const user = useUser();
     const [searchTerm, setSearchTerm] = useState("");
-    const [rows, setRows] = useState([]);
-    const [loading, setLoading] = useState(false);
-
-    const fetchFavorites = useCallback(async () => {
-        if (!user?.id) return;
-        setLoading(true);
-        try {
-            const { data, error } = await supabase
-                .from("favorites")
-                .select(
-                    `item:item_id(
-            item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,available,created_at,quantity,main_image_url
-          )`
-                )
-                .eq("user_id", user.id)
-                .order("created_at", { ascending: false });
-            if (error) throw error;
-            setRows((data || []).map((r) => r.item).filter(Boolean));
-        } catch (e) {
-            console.error("Load favorites failed:", e.message);
-            setRows([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [user?.id]);
-
-    useEffect(() => {
-        fetchFavorites();
-    }, [fetchFavorites]);
+    const { favorites, loading, toggleFavorite } = useFavorites();
 
     const items = useMemo(() => {
         const term = searchTerm.trim().toLowerCase();
-        return (rows || []).filter((it) => {
+        return (favorites || []).filter((it) => {
             if (!term) return true;
             return (
                 (it.title || "").toLowerCase().includes(term) ||
@@ -51,7 +23,7 @@ export default function Favorites() {
                 (it.location || "").toLowerCase().includes(term)
             );
         });
-    }, [rows, searchTerm]);
+    }, [favorites, searchTerm]);
 
     return (
         <div className="min-h-screen bg-[#FAF5EF]">
@@ -113,7 +85,7 @@ export default function Favorites() {
                                 imageUrl={it.main_image_url || undefined}
                                 isOwner={user?.id === it.user_id}
                                 isFavorited={true}
-                                onHeartClick={undefined}
+                                onHeartClick={() => toggleFavorite(it)}
                                 onRentClick={() =>
                                     (window.location.href = `/profile/${it.user_id}`)
                                 }

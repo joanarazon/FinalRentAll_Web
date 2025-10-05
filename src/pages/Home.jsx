@@ -8,11 +8,11 @@ import AddItemModal from "../components/AddItemModal";
 import { supabase } from "../../supabaseClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import BookItemModal from "../components/BookItemModal";
+import { useFavorites } from "../context/FavoritesContext.jsx";
 import { ChevronDown } from "lucide-react";
 
 function Home() {
     const user = useUser();
-    const [favorites, setFavorites] = useState([]);
     const [addOpen, setAddOpen] = useState(false);
     const [categories, setCategories] = useState([]); // {category_id, name}
     const [selectedCategoryId, setSelectedCategoryId] = useState("");
@@ -26,50 +26,7 @@ function Home() {
     const [priceRange, setPriceRange] = useState([0, 1000]);
     const [maxPrice, setMaxPrice] = useState(1000);
 
-    const toggleFavorite = async (item) => {
-        if (!user?.id) {
-            console.warn("User not authenticated, cannot toggle favorite");
-            return;
-        }
-
-        try {
-            const exists = favorites.some(
-                (fav) => fav.item_id === item.item_id
-            );
-
-            if (exists) {
-                // Remove from favorites
-                const { error } = await supabase
-                    .from("favorites")
-                    .delete()
-                    .eq("user_id", user.id)
-                    .eq("item_id", item.item_id);
-
-                if (error) throw error;
-
-                // Update local state
-                setFavorites((prev) =>
-                    prev.filter((fav) => fav.item_id !== item.item_id)
-                );
-            } else {
-                // Add to favorites
-                const { error } = await supabase.from("favorites").insert([
-                    {
-                        user_id: user.id,
-                        item_id: item.item_id,
-                    },
-                ]);
-
-                if (error) throw error;
-
-                // Update local state
-                setFavorites((prev) => [...prev, item]);
-            }
-        } catch (error) {
-            console.error("Failed to toggle favorite:", error);
-            // Could add toast notification here if desired
-        }
-    };
+    const { favorites, toggleFavorite, isFavorited } = useFavorites();
 
     const fetchCategories = useCallback(async () => {
         const { data, error } = await supabase
@@ -78,49 +35,6 @@ function Home() {
             .order("name");
         if (!error) setCategories(data || []);
     }, []);
-
-    const fetchFavorites = useCallback(async () => {
-        if (!user?.id) {
-            setFavorites([]);
-            return;
-        }
-
-        try {
-            const { data, error } = await supabase
-                .from("favorites")
-                .select(
-                    `
-                    item_id,
-                    items!inner(
-                        item_id,
-                        user_id,
-                        title,
-                        description,
-                        price_per_day,
-                        deposit_fee,
-                        location,
-                        available,
-                        created_at,
-                        quantity,
-                        main_image_url,
-                        category_id
-                    )
-                `
-                )
-                .eq("user_id", user.id);
-
-            if (error) throw error;
-
-            // Extract items from the favorites relationship
-            const favoriteItems = (data || [])
-                .map((fav) => fav.items)
-                .filter(Boolean);
-            setFavorites(favoriteItems);
-        } catch (error) {
-            console.error("Failed to fetch favorites:", error);
-            setFavorites([]);
-        }
-    }, [user?.id]);
 
     const getImageUrl = async (userId, itemId) => {
         try {
@@ -334,10 +248,6 @@ function Home() {
     }, [fetchItems]);
 
     useEffect(() => {
-        fetchFavorites();
-    }, [fetchFavorites]);
-
-    useEffect(() => {
         const channel = supabase
             .channel("items_changes")
             .on(
@@ -371,31 +281,6 @@ function Home() {
         };
     }, [fetchItems]);
 
-    useEffect(() => {
-        if (!user?.id) return;
-
-        const favoritesChannel = supabase
-            .channel("favorites_changes")
-            .on(
-                "postgres_changes",
-                { event: "*", schema: "public", table: "favorites" },
-                (payload) => {
-                    // Only refresh if the change affects this user
-                    if (
-                        payload.new?.user_id === user.id ||
-                        payload.old?.user_id === user.id
-                    ) {
-                        fetchFavorites();
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(favoritesChannel);
-        };
-    }, [user?.id, fetchFavorites]);
-
     const uniqueLocations = [
         ...new Set(items.map((item) => item.location).filter(Boolean)),
     ].sort();
@@ -427,7 +312,6 @@ function Home() {
         <div className="bg-background min-h-screen">
             <TopMenu
                 activePage="home"
-                favorites={favorites}
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
             />
@@ -688,9 +572,6 @@ function Home() {
                     {!loading &&
                         filteredItems.length > 0 &&
                         filteredItems.map((item, index) => {
-                            const isFavorited = favorites.some(
-                                (fav) => fav.item_id === item.raw.item_id
-                            );
                             return (
                                 <ItemCard
                                     key={index}
@@ -703,7 +584,7 @@ function Home() {
                                     quantity={item.quantity}
                                     imageUrl={item.imageUrl}
                                     isOwner={user?.id === item.ownerId}
-                                    isFavorited={isFavorited}
+                                    isFavorited={isFavorited(item.raw?.item_id)}
                                     onHeartClick={() =>
                                         toggleFavorite(item.raw || item)
                                     }
