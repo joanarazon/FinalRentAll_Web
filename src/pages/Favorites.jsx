@@ -7,11 +7,95 @@ import { useUser } from "../hooks/useUser";
 import { useFavorites } from "../context/FavoritesContext.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
+import BookItemModal from "../components/BookItemModal";
 
 export default function Favorites() {
     const user = useUser();
     const [searchTerm, setSearchTerm] = useState("");
     const { favorites, loading, toggleFavorite } = useFavorites();
+    const navigate = useNavigate();
+    
+    // State for booking modal
+    const [bookOpen, setBookOpen] = useState(false);
+    const [selectedItem, setSelectedItem] = useState(null);
+
+    // Copy the same function from Home.tsx
+    const getOrCreateConversation = async (currentUserId, otherUserId, itemId, itemTitle) => {
+        try {
+            // Check if conversation already exists
+            const { data: existingConversation, error: checkError } = await supabase
+                .from("conversations")
+                .select("id")
+                .or(
+                    `and(user1_id.eq.${currentUserId},user2_id.eq.${otherUserId}),and(user1_id.eq.${otherUserId},user2_id.eq.${currentUserId})`
+                )
+                .single();
+
+            if (checkError && checkError.code !== "PGRST116") {
+                throw checkError;
+            }
+
+            if (existingConversation) {
+                return existingConversation.id;
+            }
+
+            // Create new conversation
+            const { data: newConversation, error: createError } = await supabase
+                .from("conversations")
+                .insert([
+                    {
+                        user1_id: currentUserId,
+                        user2_id: otherUserId,
+                        item_id: itemId,
+                        last_message: `Interested in: ${itemTitle}`,
+                        last_message_at: new Date().toISOString(),
+                    },
+                ])
+                .select()
+                .single();
+
+            if (createError) throw createError;
+            return newConversation.id;
+        } catch (error) {
+            console.error("Error in getOrCreateConversation:", error);
+            throw error;
+        }
+    };
+
+    const navigateToChat = (conversationId, otherUserId, itemTitle, itemId) => {
+        navigate(`/chat?conversationId=${conversationId}&otherUserId=${otherUserId}&itemId=${itemId}`);
+    };
+
+    const handleMessageClick = async (item) => {
+        try {
+            // Check if conversation exists or create new one
+            let conversationId = await getOrCreateConversation(
+                user.id,
+                item.user_id,
+                item.item_id,
+                item.title
+            );
+
+            // Navigate to chat with conversation details
+            navigateToChat(conversationId, item.user_id, item.title, item.item_id);
+        } catch (error) {
+            console.error("Error starting conversation:", error);
+            import("sweetalert2").then(({ default: Swal }) =>
+                Swal.fire({
+                    icon: "error",
+                    title: "Error",
+                    text: "Failed to start conversation. Please try again.",
+                })
+            );
+        }
+    };
+
+    const handleRentClick = (item) => {
+        setSelectedItem(item);
+        setBookOpen(true);
+    };
 
     const items = useMemo(() => {
         const term = searchTerm.trim().toLowerCase();
@@ -91,17 +175,33 @@ export default function Favorites() {
                                 isOwner={user?.id === it.user_id}
                                 isFavorited={true}
                                 onHeartClick={() => toggleFavorite(it)}
-                                onRentClick={() =>
-                                    (window.location.href = `/profile/${it.user_id}`)
+                                onRentClick={
+                                    user?.id !== it.user_id
+                                        ? () => handleRentClick(it)
+                                        : undefined
                                 }
-                                onMessageOwner={() =>
-                                    (window.location.href = `/inbox?to=${it.user_id}&item=${it.item_id}`)
+                                onMessageOwner={
+                                    user?.id !== it.user_id
+                                        ? () => handleMessageClick(it)
+                                        : undefined
                                 }
                             />
                         ))}
                     </div>
                 )}
             </div>
+
+            {/* Add BookItemModal */}
+            <BookItemModal
+                open={bookOpen}
+                onOpenChange={setBookOpen}
+                item={selectedItem}
+                currentUserId={user?.id}
+                onBooked={() => {
+                    // You can add any refresh logic here if needed
+                    console.log("Item booked successfully");
+                }}
+            />
         </div>
     );
 }
