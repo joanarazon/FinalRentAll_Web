@@ -12,6 +12,7 @@ export default function AdminSidebarMenu() {
         { to: "/adminhome", label: "Admin Dashboard", icon: LayoutDashboard },
         { to: "/pending-users", label: "Pending Users", icon: Users },
         { to: "/pending-items", label: "Pending Items", icon: PackageSearch },
+        { to: "/total-users", label: "Total Users", icon: PackageSearch },
         // Pending Bookings hidden: handled by lessors in their own view
         {
             to: "/renting-history",

@@ -278,20 +278,8 @@ export default function AddItemModal({
                         placeholder="City / Barangay"
                     />
 
-                    <div className="flex items-center gap-2 mt-1">
-                        <input
-                            id="available"
-                            name="available"
-                            type="checkbox"
-                            checked={form.available}
-                            onChange={onChange}
-                        />
-                        <label htmlFor="available" className="text-sm">
-                            Available
-                        </label>
-                    </div>
 
-                    <label className="text-sm">Image (optional)</label>
+
                     <input
                         type="file"
                         accept="image/*"

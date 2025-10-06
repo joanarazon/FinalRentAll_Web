@@ -33,6 +33,8 @@ import { FavoritesProvider } from "./context/FavoritesContext.jsx";
 import Loading from "./components/Loading.jsx";
 import PendingVerification from "./pages/PendingVerification.jsx";
 import Chat from "./components/Chat.jsx";
+import TotalUser from "./pages/admin/pages/TotalUsers.jsx";
+
 import Banned from "./pages/Banned";
 
 import { generateToken } from "./notification/firebase.js";
@@ -139,6 +141,8 @@ export default function App() {
                                 path="/reported-items"
                                 element={<ReportedItems />}
                             />
+                            <Route path="/total-users" element={<TotalUser />} />
+                            
                         </Route>
                         <Route path="/banned" element={<Banned />} />
                         {/** Pending Bookings route hidden per product change (handled by lessors) **/}
