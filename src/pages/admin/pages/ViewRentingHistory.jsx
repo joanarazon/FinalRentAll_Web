@@ -25,9 +25,13 @@ function ViewRentingHistory() {
 
     // Filters
     const [itemName, setItemName] = useState("");
+    const [itemPicture, setItemPicture] = useState("");
     const [status, setStatus] = useState("");
     const [categoryId, setCategoryId] = useState("");
     const [dateRange, setDateRange] = useState({ from: null, to: null });
+
+    const [selectedImage, setSelectedImage] = useState(null);
+    const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
     // Fetch categories for dropdown
     useEffect(() => {
@@ -53,13 +57,14 @@ function ViewRentingHistory() {
                 .from("rental_transactions")
                 .select(
                     `rental_id, start_date, end_date, status, total_cost, quantity, created_at,
-           items:items ( item_id, title, category_id )`
+           items:items ( item_id, title, category_id, main_image_url )`
                 )
                 .order("created_at", { ascending: false });
 
             // Server-side filters
             if (status) query = query.eq("status", status);
             if (itemName) query = query.ilike("items.title", `%${itemName}%`);
+            if (itemPicture) query = query.ilike("items.main_image_url", `%${itemPicture}%`);
             if (categoryId)
                 query = query.eq("items.category_id", Number(categoryId));
             if (dateRange?.from)
@@ -216,8 +221,8 @@ function ViewRentingHistory() {
                                     >
                                         {dateRange.from
                                             ? new Date(
-                                                  dateRange.from
-                                              ).toLocaleDateString()
+                                                dateRange.from
+                                            ).toLocaleDateString()
                                             : "Select start..."}
                                     </span>
                                 </button>
@@ -257,8 +262,8 @@ function ViewRentingHistory() {
                                         >
                                             {dateRange.to
                                                 ? new Date(
-                                                      dateRange.to
-                                                  ).toLocaleDateString()
+                                                    dateRange.to
+                                                ).toLocaleDateString()
                                                 : "Select end..."}
                                         </span>
                                     </button>
@@ -319,6 +324,7 @@ function ViewRentingHistory() {
                                 <th className="p-3">Item Name</th>
                                 <th className="p-3">Category</th>
                                 <th className="p-3">Status</th>
+                                <th className="p-3">Item Picture</th>
                             </tr>
                         </thead>
                         <tbody className="text-gray-700">
@@ -362,6 +368,21 @@ function ViewRentingHistory() {
                                             {r.status}
                                         </span>
                                     </td>
+                                    <td className="p-3">
+                                        {r.items?.main_image_url ? (
+                                            <img
+                                                src={r.items.main_image_url}
+                                                alt={r.items?.title || "Item image"}
+                                                className="w-16 h-16 object-cover rounded-md border border-gray-200 cursor-pointer hover:opacity-80 transition"
+                                                onClick={() => {
+                                                    setSelectedImage(r.items.main_image_url);
+                                                    setIsImageModalOpen(true);
+                                                }}
+                                            />
+                                        ) : (
+                                            <span className="text-gray-400 italic">No image</span>
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                             {!loading && filtered.length === 0 && (
@@ -388,6 +409,26 @@ function ViewRentingHistory() {
                     </table>
                 </div>
             </div>
+
+            {isImageModalOpen && selectedImage && (
+                <div
+                    className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
+                    onClick={() => setIsImageModalOpen(false)}
+                >
+                    <img
+                        src={selectedImage}
+                        alt="Full view"
+                        className="max-w-[90%] max-h-[90%] object-contain rounded-lg shadow-2xl border border-gray-300"
+                        onClick={(e) => e.stopPropagation()} // prevent closing when clicking image itself
+                    />
+                    <button
+                        className="absolute top-5 right-5 bg-white text-gray-800 px-4 py-2 rounded-lg shadow-md hover:bg-gray-200 transition"
+                        onClick={() => setIsImageModalOpen(false)}
+                    >
+                        Close
+                    </button>
+                </div>
+            )}
         </AdminLayout>
     );
 }
