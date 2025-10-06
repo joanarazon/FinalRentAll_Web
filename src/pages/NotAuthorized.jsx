@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/hooks/useUser";
 
@@ -8,6 +8,17 @@ export default function NotAuthorized() {
     const user = useUser();
     const goBackTarget =
         user?.role === "admin" ? "/adminhome" : user ? "/home" : "/";
+
+    // If user is banned, redirect to /banned
+    if (
+        user &&
+        (user.status === "banned" ||
+            user.account_status === "banned" ||
+            user.is_banned)
+    ) {
+        return <Navigate to="/banned" replace />;
+    }
+
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#FFFBF2] p-6">
             <h1 className="text-2xl font-semibold mb-2">Not authorized</h1>
