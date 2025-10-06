@@ -459,10 +459,6 @@ function Inbox({ favorites, searchTerm, setSearchTerm }) {
                                                 </span>
                                             </div>
 
-                                            <p className="text-sm text-orange-500 font-medium mb-1 truncate">
-                                                📦 {conversation.itemTitle}
-                                            </p>
-
                                             <p className="text-gray-600 text-sm line-clamp-2">
                                                 {conversation.preview}
                                             </p>
