@@ -8,11 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
     Camera,
     EllipsisVertical,
     Pencil,
-    Plus,
-    Minus,
     Trash2,
     ChevronLeft,
     Calendar,
@@ -648,24 +652,6 @@ function OwnerItemActions({ item, onChanged }) {
     const [busy, setBusy] = useState(false);
     const toast = useToastApi();
 
-    const updateQuantity = async (delta) => {
-        try {
-            setBusy(true);
-            const next = Math.max(0, (Number(item.quantity) || 0) + delta);
-            const { error } = await supabase
-                .from("items")
-                .update({ quantity: next })
-                .eq("item_id", item.item_id);
-            if (error) throw error;
-            toast.success(`Quantity ${delta > 0 ? "increased" : "decreased"}.`);
-            onChanged?.();
-        } catch (e) {
-            toast.error(e.message || "Update failed");
-        } finally {
-            setBusy(false);
-        }
-    };
-
     const deletePost = async () => {
         if (!confirm("Delete this post? This cannot be undone.")) return;
         try {
@@ -701,32 +687,6 @@ function OwnerItemActions({ item, onChanged }) {
                 <DropdownMenuContent align="end" className="min-w-48">
                     <DropdownMenuItem onClick={() => setEditOpen(true)}>
                         <Pencil className="w-4 h-4" /> Edit post
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                        onClick={() => {
-                            const input = prompt("How many units to add?", "1");
-                            const n = Number.parseInt(input || "0", 10);
-                            if (!Number.isFinite(n) || n <= 0) return;
-                            updateQuantity(n);
-                        }}
-                        disabled={busy}
-                    >
-                        <Plus className="w-4 h-4" /> Add units…
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                        onClick={() => {
-                            const input = prompt(
-                                "How many units to subtract?",
-                                "1"
-                            );
-                            const n = Number.parseInt(input || "0", 10);
-                            if (!Number.isFinite(n) || n <= 0) return;
-                            updateQuantity(-n);
-                        }}
-                        disabled={busy || (Number(item.quantity) || 0) <= 0}
-                    >
-                        <Minus className="w-4 h-4" /> Subtract units…
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -817,21 +777,14 @@ function EditItemModal({ open, onOpenChange, item, onSaved }) {
         }
     };
 
-    if (!open) return null;
     return (
-        <div className="fixed inset-0 bg-[#1E1E1E]/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-2xl font-bold text-[#1E1E1E]">
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle className="text-2xl font-bold text-[#1E1E1E]">
                         Edit Post
-                    </h3>
-                    <button
-                        className="text-[#1E1E1E]/60 hover:text-[#1E1E1E] transition-colors"
-                        onClick={() => onOpenChange(false)}
-                    >
-                        <span className="text-2xl">×</span>
-                    </button>
-                </div>
+                    </DialogTitle>
+                </DialogHeader>
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-[#1E1E1E] mb-1.5">
@@ -944,7 +897,7 @@ function EditItemModal({ open, onOpenChange, item, onSaved }) {
                         {saving ? "Saving..." : "Save Changes"}
                     </Button>
                 </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

@@ -363,52 +363,69 @@ function Home() {
                         </div>
 
                         {/* Price Range */}
-                        <div className="flex items-center gap-3 min-w-[280px]">
+                        <div className="flex items-center gap-3 min-w-[320px]">
                             <span className="text-sm font-medium text-foreground whitespace-nowrap">
                                 Price:
                             </span>
-                            <div className="flex-1 flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    ₱{priceRange[0]}
+                            <div className="flex items-center gap-3">
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                        ₱
+                                    </span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={priceRange[0] || ""}
+                                        onChange={(e) => {
+                                            const value = Math.max(
+                                                0,
+                                                Number(e.target.value) || 0
+                                            );
+                                            // Only enforce min <= max if max is set
+                                            if (
+                                                priceRange[1] > 0 &&
+                                                value > priceRange[1]
+                                            ) {
+                                                setPriceRange([
+                                                    priceRange[1],
+                                                    priceRange[1],
+                                                ]);
+                                            } else {
+                                                setPriceRange([
+                                                    value,
+                                                    priceRange[1],
+                                                ]);
+                                            }
+                                        }}
+                                        className="w-28 pl-6 pr-2 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-[#FFAB00] transition-all"
+                                        placeholder="Min"
+                                    />
+                                </div>
+                                <span className="text-sm text-muted-foreground font-medium">
+                                    to
                                 </span>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max={maxPrice}
-                                    value={priceRange[0]}
-                                    onChange={(e) =>
-                                        setPriceRange([
-                                            Number(e.target.value),
-                                            priceRange[1],
-                                        ])
-                                    }
-                                    className="flex-1 h-2 bg-border rounded-lg appearance-none cursor-pointer"
-                                    style={{
-                                        accentColor: "#FFAB00",
-                                    }}
-                                />
-                                <span className="text-xs text-muted-foreground">
-                                    -
-                                </span>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max={maxPrice}
-                                    value={priceRange[1]}
-                                    onChange={(e) =>
-                                        setPriceRange([
-                                            priceRange[0],
-                                            Number(e.target.value),
-                                        ])
-                                    }
-                                    className="flex-1 h-2 bg-border rounded-lg appearance-none cursor-pointer"
-                                    style={{
-                                        accentColor: "#FFAB00",
-                                    }}
-                                />
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    ₱{priceRange[1]}
-                                </span>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                        ₱
+                                    </span>
+                                    <input
+                                        type="number"
+                                        min={priceRange[0]}
+                                        value={priceRange[1] || ""}
+                                        onChange={(e) => {
+                                            const value = Math.max(
+                                                priceRange[0],
+                                                Number(e.target.value) || 0
+                                            );
+                                            setPriceRange([
+                                                priceRange[0],
+                                                value,
+                                            ]);
+                                        }}
+                                        className="w-28 pl-6 pr-2 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-[#FFAB00] transition-all"
+                                        placeholder="Max"
+                                    />
+                                </div>
                             </div>
                         </div>
 
@@ -446,7 +463,6 @@ function Home() {
                             </select>
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
-
                         {/* Location Dropdown */}
                         <div className="relative">
                             <select
@@ -465,53 +481,86 @@ function Home() {
                             </select>
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
-
                         {/* Price Range */}
-                        <div className="bg-background border-2 border-border rounded-lg px-4 py-3">
-                            <div className="flex items-center justify-between mb-2">
+                        <div className="bg-background border-2 border-border rounded-lg px-4 py-4">
+                            <div className="flex items-center justify-between mb-4">
                                 <span className="text-sm font-medium text-foreground">
                                     Price Range
                                 </span>
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs text-muted-foreground font-medium px-2 py-1 bg-muted rounded">
                                     ₱{priceRange[0]} - ₱{priceRange[1]}
                                 </span>
                             </div>
-                            <div className="space-y-2">
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max={maxPrice}
-                                    value={priceRange[0]}
-                                    onChange={(e) =>
-                                        setPriceRange([
-                                            Number(e.target.value),
-                                            priceRange[1],
-                                        ])
-                                    }
-                                    className="w-full h-2 bg-border rounded-lg appearance-none cursor-pointer"
-                                    style={{
-                                        accentColor: "#FFAB00",
-                                    }}
-                                />
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max={maxPrice}
-                                    value={priceRange[1]}
-                                    onChange={(e) =>
-                                        setPriceRange([
-                                            priceRange[0],
-                                            Number(e.target.value),
-                                        ])
-                                    }
-                                    className="w-full h-2 bg-border rounded-lg appearance-none cursor-pointer"
-                                    style={{
-                                        accentColor: "#FFAB00",
-                                    }}
-                                />
-                            </div>
-                        </div>
 
+                            {/* Input Fields */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-medium text-muted-foreground mb-2">
+                                        Minimum Price
+                                    </label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                            ₱
+                                        </span>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={priceRange[0] || ""}
+                                            onChange={(e) => {
+                                                const value = Math.max(
+                                                    0,
+                                                    Number(e.target.value) || 0
+                                                );
+                                                // Only enforce min <= max if max is set
+                                                if (
+                                                    priceRange[1] > 0 &&
+                                                    value > priceRange[1]
+                                                ) {
+                                                    setPriceRange([
+                                                        priceRange[1],
+                                                        priceRange[1],
+                                                    ]);
+                                                } else {
+                                                    setPriceRange([
+                                                        value,
+                                                        priceRange[1],
+                                                    ]);
+                                                }
+                                            }}
+                                            className="w-full pl-7 pr-3 py-3 text-sm bg-white border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-[#FFAB00] transition-all"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-muted-foreground mb-2">
+                                        Maximum Price
+                                    </label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                            ₱
+                                        </span>
+                                        <input
+                                            type="number"
+                                            min={priceRange[0]}
+                                            value={priceRange[1] || ""}
+                                            onChange={(e) => {
+                                                const value = Math.max(
+                                                    priceRange[0],
+                                                    Number(e.target.value) || 0
+                                                );
+                                                setPriceRange([
+                                                    priceRange[0],
+                                                    value,
+                                                ]);
+                                            }}
+                                            className="w-full pl-7 pr-3 py-3 text-sm bg-white border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-[#FFAB00] transition-all"
+                                            placeholder="Any amount"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>{" "}
                         {/* Clear Filters Button */}
                         {hasActiveFilters && (
                             <button
