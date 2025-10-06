@@ -30,7 +30,17 @@ export default function ReportedItems() {
     const [loading, setLoading] = useState(false);
     const [statusFilter, setStatusFilter] = useState("pending");
     const [resolvingId, setResolvingId] = useState(null);
-    const [confirmDialog, setConfirmDialog] = useState(null);
+
+    const [noteDialog, setNoteDialog] = useState({
+        open: false,
+        action: null,
+        complaintId: null,
+        itemId: null,
+        ownerId: null,
+        warningAmount: null,
+    });
+    const [resolutionNote, setResolutionNote] = useState("");
+    const [noteSubmitting, setNoteSubmitting] = useState(false);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -39,13 +49,13 @@ export default function ReportedItems() {
                 .from("complaints")
                 .select(
                     `
-                    complaint_id, sender_id, target_item_id, rental_id, reason, content, sent_at, status,
-                    sender:users!complaints_sender_id_fkey(id, first_name, last_name),
-                    item:items!complaints_target_item_id_fkey(
-                        item_id, title, user_id, main_image_url,
-                        owner:users!items_user_id_fkey(id, first_name, last_name)
-                    )
-                `
+          complaint_id, sender_id, target_item_id, rental_id, reason, content, sent_at, status, resolution_note, resolved_by, resolved_at,
+          sender:users!complaints_sender_id_fkey(id, first_name, last_name),
+          item:items!complaints_target_item_id_fkey(
+              item_id, title, user_id, main_image_url,
+              owner:users!items_user_id_fkey(id, first_name, last_name)
+          )
+        `
                 )
                 .not("target_item_id", "is", null)
                 .order("sent_at", { ascending: false });
@@ -69,105 +79,99 @@ export default function ReportedItems() {
         fetchData();
     }, [fetchData]);
 
-    const warnAndBanItem = async (
+    const handleActionWithNote = (
+        action,
         complaintId,
-        itemId,
-        ownerId,
-        warningAmount
+        itemId = null,
+        ownerId = null,
+        warningAmount = null
     ) => {
-        if (!admin?.id || !itemId || !ownerId) return;
-        setResolvingId(complaintId);
+        setNoteDialog({
+            open: true,
+            action,
+            complaintId,
+            itemId,
+            ownerId,
+            warningAmount,
+        });
+        setResolutionNote("");
+    };
+
+    const submitNoteAction = async () => {
+        if (!admin?.id || !noteDialog.complaintId) return;
+        setNoteSubmitting(true);
         try {
-            const { error: banErr } = await supabase
-                .from("items")
-                .update({ item_status: "banned" })
-                .eq("item_id", itemId);
-            if (banErr) throw banErr;
+            // 1️⃣ If banning, ban the item
+            if (noteDialog.action === "ban") {
+                const { error: banErr } = await supabase
+                    .from("items")
+                    .update({ item_status: "banned" })
+                    .eq("item_id", noteDialog.itemId);
+                if (banErr) throw banErr;
 
-            const { error: warnErr } = await supabase
-                .from("users")
-                .update({
-                    warnings_count: supabase.rpc("increment_user_warnings", {
-                        user_id: ownerId,
-                        increment_by: warningAmount,
-                    }),
-                })
-                .eq("id", ownerId);
-            if (warnErr) throw warnErr;
+                // Add warnings via RPC
+                const { error: warnErr } = await supabase.rpc(
+                    "increment_user_warnings",
+                    {
+                        user_id: noteDialog.ownerId,
+                        increment_by: noteDialog.warningAmount,
+                    }
+                );
+                if (warnErr) throw warnErr;
+            }
 
+            // 2️⃣ Update the complaint with resolution info
             const { error } = await supabase
                 .from("complaints")
                 .update({
-                    status: "resolved",
+                    status:
+                        noteDialog.action === "ban"
+                            ? "banned"
+                            : noteDialog.action === "resolve"
+                            ? "resolved"
+                            : "rejected",
                     resolved_by: admin.id,
                     resolved_at: new Date().toISOString(),
+                    resolution_note: resolutionNote.trim(),
                 })
-                .eq("complaint_id", complaintId)
-                .neq("status", "resolved");
+                .eq("complaint_id", noteDialog.complaintId);
             if (error) throw error;
 
-            toast.success(
-                `Item banned and +${warningAmount} warning${
-                    warningAmount > 1 ? "s" : ""
-                } issued to owner.`
-            );
-            fetchData();
+            // 3️⃣ Toast notifications
+            if (noteDialog.action === "ban") {
+                toast.success(
+                    `Item banned and +${noteDialog.warningAmount} warning${
+                        noteDialog.warningAmount > 1 ? "s" : ""
+                    } issued to owner.`
+                );
+            } else if (noteDialog.action === "resolve") {
+                toast.success("Report marked as resolved.");
+            } else {
+                toast.success("Report rejected due to insufficient evidence.");
+            }
+
+            await fetchData();
         } catch (e) {
-            console.error("Ban/resolve failed:", e.message);
+            console.error("Action failed:", e.message);
             toast.error("Failed to complete action.");
         } finally {
-            setResolvingId(null);
-            setConfirmDialog(null);
-        }
-    };
-
-    const markResolved = async (complaintId) => {
-        if (!admin?.id) return;
-        setResolvingId(complaintId);
-        try {
-            const { error } = await supabase
-                .from("complaints")
-                .update({
-                    status: "resolved",
-                    resolved_by: admin.id,
-                    resolved_at: new Date().toISOString(),
-                })
-                .eq("complaint_id", complaintId)
-                .neq("status", "resolved");
-            if (error) throw error;
-            toast.success("Report marked as resolved.");
-            fetchData();
-        } catch (e) {
-            console.error("Resolve failed:", e.message);
-            toast.error("Failed to resolve report.");
-        } finally {
+            setNoteSubmitting(false);
+            setNoteDialog({
+                open: false,
+                action: null,
+                complaintId: null,
+                itemId: null,
+                ownerId: null,
+                warningAmount: null,
+            });
             setResolvingId(null);
         }
     };
 
-    const rejectReport = async (complaintId) => {
-        if (!admin?.id) return;
-        setResolvingId(complaintId);
-        try {
-            const { error } = await supabase
-                .from("complaints")
-                .update({
-                    status: "rejected",
-                    resolved_by: admin.id,
-                    resolved_at: new Date().toISOString(),
-                })
-                .eq("complaint_id", complaintId)
-                .neq("status", "resolved");
-            if (error) throw error;
-            toast.success("Report rejected due to insufficient evidence.");
-            fetchData();
-        } catch (e) {
-            console.error("Reject failed:", e.message);
-            toast.error("Failed to reject report.");
-        } finally {
-            setResolvingId(null);
-        }
-    };
+    const markResolved = (complaintId) =>
+        handleActionWithNote("resolve", complaintId);
+    const rejectReport = (complaintId) =>
+        handleActionWithNote("reject", complaintId);
 
     return (
         <AdminLayout>
@@ -177,33 +181,9 @@ export default function ReportedItems() {
                     <p className="text-gray-600 mb-4">
                         Review and take action on reports submitted by users.
                     </p>
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-900">
-                        <strong>Action Guide:</strong>
-                        <ul className="list-disc pl-5 mt-1 space-y-1">
-                            <li>
-                                <b>Minor Violation</b>: Bans the item and adds 1
-                                warning to the owner.
-                            </li>
-                            <li>
-                                <b>Major Violation</b>: Bans the item and adds 3
-                                warnings to the owner.
-                            </li>
-                            <li>
-                                <b>Resolve Only</b>: Marks the report as
-                                resolved without banning or warnings.
-                            </li>
-                            <li>
-                                <b>Reject Report</b>: Rejects the report (no
-                                action taken, marks as rejected).
-                            </li>
-                            <li>
-                                <b>View</b>: Shows full details of the report.
-                            </li>
-                        </ul>
-                    </div>
                 </div>
 
-                {/* Filter Section */}
+                {/* Filter */}
                 <div className="flex items-center gap-3 mb-6">
                     <label className="text-sm font-medium">Filter</label>
                     <select
@@ -214,6 +194,7 @@ export default function ReportedItems() {
                         <option value="pending">Pending</option>
                         <option value="resolved">Resolved</option>
                         <option value="rejected">Rejected</option>
+                        <option value="banned">Banned</option>
                         <option value="all">All</option>
                     </select>
                     <Button
@@ -228,7 +209,7 @@ export default function ReportedItems() {
                     </Button>
                 </div>
 
-                {/* Report List */}
+                {/* Report list */}
                 {loading ? (
                     <div className="text-sm text-gray-600">
                         Loading reports…
@@ -247,6 +228,8 @@ export default function ReportedItems() {
                                         ? "bg-gray-50"
                                         : r.status === "rejected"
                                         ? "bg-red-50/50"
+                                        : r.status === "banned"
+                                        ? "bg-amber-50/50"
                                         : "hover:bg-gray-50/70 bg-white"
                                 }`}
                             >
@@ -260,7 +243,9 @@ export default function ReportedItems() {
                                                 ? "secondary"
                                                 : r.status === "rejected"
                                                 ? "destructive"
-                                                : "outline"
+                                                : r.status === "banned"
+                                                ? "outline"
+                                                : "default"
                                         }
                                     >
                                         {r.status}
@@ -284,18 +269,15 @@ export default function ReportedItems() {
                                             <Button
                                                 size="sm"
                                                 className="bg-amber-500 text-white hover:bg-amber-600"
-                                                disabled={
-                                                    resolvingId ===
-                                                    r.complaint_id
-                                                }
                                                 onClick={() =>
-                                                    setConfirmDialog({
-                                                        ...r,
-                                                        type: "minor",
-                                                        amount: 1,
-                                                    })
+                                                    handleActionWithNote(
+                                                        "ban",
+                                                        r.complaint_id,
+                                                        r.target_item_id,
+                                                        r.item?.user_id,
+                                                        1
+                                                    )
                                                 }
-                                                title="Ban item and add 1 warning to the owner."
                                             >
                                                 <Gavel className="w-4 h-4 mr-1" />{" "}
                                                 Minor Violation
@@ -304,18 +286,15 @@ export default function ReportedItems() {
                                                 size="sm"
                                                 variant="destructive"
                                                 className="bg-red-600 text-white hover:bg-red-700"
-                                                disabled={
-                                                    resolvingId ===
-                                                    r.complaint_id
-                                                }
                                                 onClick={() =>
-                                                    setConfirmDialog({
-                                                        ...r,
-                                                        type: "major",
-                                                        amount: 3,
-                                                    })
+                                                    handleActionWithNote(
+                                                        "ban",
+                                                        r.complaint_id,
+                                                        r.target_item_id,
+                                                        r.item?.user_id,
+                                                        3
+                                                    )
                                                 }
-                                                title="Ban item and add 3 warnings to the owner."
                                             >
                                                 <ShieldBan className="w-4 h-4 mr-1" />{" "}
                                                 Major Violation
@@ -323,14 +302,9 @@ export default function ReportedItems() {
                                             <Button
                                                 size="sm"
                                                 className="bg-green-600 text-white hover:bg-green-700"
-                                                disabled={
-                                                    resolvingId ===
-                                                    r.complaint_id
-                                                }
                                                 onClick={() =>
                                                     markResolved(r.complaint_id)
                                                 }
-                                                title="Mark report as resolved without banning or warnings."
                                             >
                                                 <CheckCircle className="w-4 h-4 mr-1" />{" "}
                                                 Resolve Only
@@ -338,15 +312,9 @@ export default function ReportedItems() {
                                             <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="text-gray-700 border-gray-400 hover:bg-gray-50"
-                                                disabled={
-                                                    resolvingId ===
-                                                    r.complaint_id
-                                                }
                                                 onClick={() =>
                                                     rejectReport(r.complaint_id)
                                                 }
-                                                title="Rejects the report (no action taken, marks as rejected)."
                                             >
                                                 <XCircle className="w-4 h-4 mr-1" />{" "}
                                                 Reject Report
@@ -359,57 +327,107 @@ export default function ReportedItems() {
                     </div>
                 )}
 
-                {/* Confirmation Dialog */}
-                {confirmDialog && (
-                    <Dialog open onOpenChange={() => setConfirmDialog(null)}>
+                {/* Resolution Note Dialog */}
+                {noteDialog.open && (
+                    <Dialog
+                        open
+                        onOpenChange={() =>
+                            setNoteDialog({ ...noteDialog, open: false })
+                        }
+                    >
                         <DialogContent>
                             <DialogHeader>
                                 <DialogTitle>
-                                    {confirmDialog.type === "minor"
-                                        ? "Confirm Minor Violation"
-                                        : "Confirm Major Violation"}
+                                    {noteDialog.action === "ban"
+                                        ? `Confirm ${
+                                              noteDialog.warningAmount === 1
+                                                  ? "Minor"
+                                                  : "Major"
+                                          } Violation`
+                                        : noteDialog.action === "resolve"
+                                        ? "Resolve Report"
+                                        : "Reject Report"}
                                 </DialogTitle>
                             </DialogHeader>
-                            <p className="text-sm text-gray-700 mb-4">
-                                Are you sure you want to ban{" "}
-                                <strong>{confirmDialog.item?.title}</strong> and
-                                issue <strong>+{confirmDialog.amount}</strong>{" "}
-                                warning{confirmDialog.amount > 1 && "s"} to its
-                                owner?
-                            </p>
+                            <div className="mb-3 text-gray-700 text-sm">
+                                {noteDialog.action === "ban" ? (
+                                    <>
+                                        Are you sure you want to ban this item
+                                        and issue{" "}
+                                        <b>+{noteDialog.warningAmount}</b>{" "}
+                                        warning
+                                        {noteDialog.warningAmount > 1 && "s"} to
+                                        its owner?
+                                    </>
+                                ) : noteDialog.action === "resolve" ? (
+                                    <>
+                                        Mark this report as resolved without
+                                        banning or warnings?
+                                    </>
+                                ) : (
+                                    <>
+                                        Reject this report? No action will be
+                                        taken.
+                                    </>
+                                )}
+                            </div>
+                            <div className="mb-2">
+                                <label className="block text-xs font-medium mb-1">
+                                    Resolution Note{" "}
+                                    <span className="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                    className="w-full border rounded p-2 text-sm"
+                                    rows={3}
+                                    value={resolutionNote}
+                                    onChange={(e) =>
+                                        setResolutionNote(e.target.value)
+                                    }
+                                    placeholder="Enter reason or details for this action (required)"
+                                    required
+                                    disabled={noteSubmitting}
+                                />
+                            </div>
                             <DialogFooter>
                                 <Button
                                     variant="outline"
-                                    onClick={() => setConfirmDialog(null)}
-                                    disabled={
-                                        resolvingId ===
-                                        confirmDialog.complaint_id
+                                    onClick={() =>
+                                        setNoteDialog({
+                                            ...noteDialog,
+                                            open: false,
+                                        })
                                     }
+                                    disabled={noteSubmitting}
                                 >
                                     Cancel
                                 </Button>
                                 <Button
-                                    variant="destructive"
+                                    variant={
+                                        noteDialog.action === "reject"
+                                            ? "destructive"
+                                            : "default"
+                                    }
                                     disabled={
-                                        resolvingId ===
-                                        confirmDialog.complaint_id
+                                        noteSubmitting || !resolutionNote.trim()
                                     }
-                                    onClick={() =>
-                                        warnAndBanItem(
-                                            confirmDialog.complaint_id,
-                                            confirmDialog.target_item_id,
-                                            confirmDialog.item?.user_id,
-                                            confirmDialog.amount
-                                        )
-                                    }
+                                    onClick={submitNoteAction}
                                 >
-                                    {resolvingId ===
-                                    confirmDialog.complaint_id ? (
+                                    {noteSubmitting ? (
                                         <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
+                                    ) : noteDialog.action === "ban" ? (
                                         <>
                                             <Gavel className="w-4 h-4 mr-1" />{" "}
                                             Confirm Ban
+                                        </>
+                                    ) : noteDialog.action === "resolve" ? (
+                                        <>
+                                            <CheckCircle className="w-4 h-4 mr-1" />{" "}
+                                            Resolve
+                                        </>
+                                    ) : (
+                                        <>
+                                            <XCircle className="w-4 h-4 mr-1" />{" "}
+                                            Reject
                                         </>
                                     )}
                                 </Button>
