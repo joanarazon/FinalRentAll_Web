@@ -905,6 +905,7 @@ function MarkReturned({ rental, onChanged }) {
                     {
                         ...bookingDetails,
                         status: "awaiting_owner_confirmation",
+                        owner_id: bookingDetails.items.user_id,
                     },
                     bookingDetails.items,
                     {
@@ -946,8 +947,7 @@ function MarkCheckIn({ rental, onChanged }) {
     const doMark = async () => {
         try {
             setLoading(true);
-
-            // Get booking details for notification
+            // Get booking details for notification (item title, owner id, renter name)
             const { data: bookingDetails, error: fetchError } = await supabase
                 .from("rental_transactions")
                 .select(
@@ -962,6 +962,7 @@ function MarkCheckIn({ rental, onChanged }) {
 
             if (fetchError) throw fetchError;
 
+            // Update status to ongoing
             const { error } = await supabase
                 .from("rental_transactions")
                 .update({ status: "ongoing" })
@@ -971,7 +972,7 @@ function MarkCheckIn({ rental, onChanged }) {
 
             toast.success("Checked in. Enjoy your stay!");
 
-            // Trigger notification to owner
+            // Trigger notification to owner (rental started)
             try {
                 const renterName = bookingDetails.renter
                     ? `${bookingDetails.renter.first_name || ""} ${
@@ -999,6 +1000,8 @@ function MarkCheckIn({ rental, onChanged }) {
                     notificationError
                 );
             }
+
+            // (Duplicate block removed) Notification already sent above
 
             onChanged && onChanged();
         } catch (e) {
@@ -1733,6 +1736,22 @@ function MarkReceived({ rental, onChanged }) {
     const doMark = async () => {
         try {
             setLoading(true);
+            // Fetch booking details to populate notification context
+            const { data: bookingDetails, error: fetchError } = await supabase
+                .from("rental_transactions")
+                .select(
+                    `
+                    *,
+                    items!inner(title, user_id),
+                    renter:renter_id(first_name, last_name)
+                `
+                )
+                .eq("rental_id", rental.rental_id)
+                .single();
+
+            if (fetchError) throw fetchError;
+
+            // Update status to ongoing
             const { error } = await supabase
                 .from("rental_transactions")
                 .update({ status: "ongoing" })
@@ -1740,6 +1759,36 @@ function MarkReceived({ rental, onChanged }) {
                 .eq("status", "on_the_way");
             if (error) throw error;
             toast.success("Marked as received. Enjoy your rental!");
+
+            // Notify owner that rental started
+            try {
+                const renterName = bookingDetails.renter
+                    ? `${bookingDetails.renter.first_name || ""} ${
+                          bookingDetails.renter.last_name || ""
+                      }`.trim()
+                    : "The renter";
+
+                await handleBookingStatusChange(
+                    "on_the_way",
+                    "ongoing",
+                    {
+                        ...bookingDetails,
+                        status: "ongoing",
+                        owner_id: bookingDetails.items.user_id,
+                    },
+                    bookingDetails.items,
+                    {
+                        renter: { full_name: renterName },
+                        owner: bookingDetails.owner,
+                    }
+                );
+            } catch (notificationError) {
+                console.error(
+                    "Failed to send rental started notification:",
+                    notificationError
+                );
+            }
+
             onChanged && onChanged();
         } catch (e) {
             toast.error(e.message || "Could not update");

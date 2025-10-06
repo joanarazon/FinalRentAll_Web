@@ -129,15 +129,15 @@ function Home() {
                                 { data: consumeRows, error: cErr },
                                 { data: departedRows, error: dErr },
                             ] = await Promise.all([
+                                // Count ALL consuming rentals (confirmed bookings reduce availability regardless of dates)
                                 supabase
                                     .from("rental_transactions")
                                     .select(
                                         "quantity, start_date, end_date, status"
                                     )
                                     .eq("item_id", it.item_id)
-                                    .in("status", consumingStatuses)
-                                    .lte("start_date", todayStr)
-                                    .gte("end_date", todayStr),
+                                    .in("status", consumingStatuses),
+                                // Only count departed/returned rentals that overlap with today (can add back capacity for today)
                                 supabase
                                     .from("rental_transactions")
                                     .select(
@@ -164,7 +164,7 @@ function Home() {
 
                             const sum = (rows) =>
                                 (rows || []).reduce(
-                                    (acc, r) => acc + (Number(r.quantity) || 1),
+                                    (acc, r) => acc + (Number(r.quantity) || 0),
                                     0
                                 );
                             const consumeSum = sum(consumeRows);

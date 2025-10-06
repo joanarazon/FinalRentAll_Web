@@ -14,6 +14,12 @@ export const NOTIFICATION_TYPES = {
 
 // Notification templates for consistent messaging
 export const NOTIFICATION_TEMPLATES = {
+    // Renter-facing booking submission
+    BOOKING_SUBMITTED_PENDING_APPROVAL: (itemTitle) => ({
+        title: "Booking Submitted",
+        message: `Your request to rent "${itemTitle}" has been sent. Wait for the owner's approval before uploading your deposit proof.`,
+        type: NOTIFICATION_TYPES.BOOKING,
+    }),
     // Booking process
     BOOKING_RECEIVED: (itemTitle, renterName) => ({
         title: "New Booking Request",
@@ -175,6 +181,21 @@ export const NOTIFICATION_TEMPLATES = {
         message: isAccommodation
             ? `${renterName} has checked out of "${itemTitle}". Please confirm to complete the stay.`
             : `${renterName} has initiated return of "${itemTitle}". Please confirm the return condition.`,
+        type: NOTIFICATION_TYPES.RETURN,
+    }),
+
+    // Return resolution notifications (missing earlier)
+    RETURN_ACCEPTED: (itemTitle, ownerName) => ({
+        title: "Return Accepted",
+        message: `${ownerName} accepted the return of "${itemTitle}". Rental completed successfully!`,
+        type: NOTIFICATION_TYPES.RETURN,
+    }),
+
+    RETURN_DISPUTED: (itemTitle, ownerName, reason = "") => ({
+        title: "Return Disputed",
+        message: `${ownerName} disputed the return of "${itemTitle}"${
+            reason ? `: ${reason}` : ""
+        }. Please check details in your bookings.`,
         type: NOTIFICATION_TYPES.RETURN,
     }),
 
@@ -417,11 +438,8 @@ export async function deleteOldNotifications(userId, daysOld = 30) {
  * - Admin notifications → /adminhome
  * - Item-specific notifications → /item/{id}
  */
-export function getNotificationNavigationPath(
-    notification,
-    currentUserId = null
-) {
-    const { type, rental_id, item_id, message } = notification;
+export function getNotificationNavigationPath(notification) {
+    const { type, message } = notification;
 
     switch (type) {
         case NOTIFICATION_TYPES.BOOKING:
@@ -498,8 +516,6 @@ export function getNotificationNavigationPath(
         default:
             return "/notifications";
     }
-
-    return "/notifications";
 }
 
 /**
@@ -852,21 +868,29 @@ export const ProcessNotifications = {
             isAccommodation
         );
 
-        // Send to both renter and owner
-        const results = await Promise.allSettled([
-            createNotification({
-                userId: renterUserId,
-                ...template,
-                rentalId,
-                itemId,
-            }),
-            createNotification({
-                userId: ownerUserId,
-                ...template,
-                rentalId,
-                itemId,
-            }),
-        ]);
+        // Send to renter and/or owner depending on provided IDs
+        const targets = [];
+        if (renterUserId) {
+            targets.push(
+                createNotification({
+                    userId: renterUserId,
+                    ...template,
+                    rentalId,
+                    itemId,
+                })
+            );
+        }
+        if (ownerUserId) {
+            targets.push(
+                createNotification({
+                    userId: ownerUserId,
+                    ...template,
+                    rentalId,
+                    itemId,
+                })
+            );
+        }
+        const results = await Promise.allSettled(targets);
 
         return {
             success: results.every((r) => r.status === "fulfilled"),

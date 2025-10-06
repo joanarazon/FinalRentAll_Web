@@ -102,8 +102,16 @@ export function FavoritesProvider({ children }) {
                     item.title
                 );
             } else {
-                // Optimistically add to favorites
-                const newFavorites = [...favorites, item];
+                // Optimistically add to favorites, ensuring image is present for immediate UI feedback
+                const optimisticItem = {
+                    ...item,
+                    main_image_url:
+                        item.main_image_url ||
+                        item.imageUrl ||
+                        item.image_url ||
+                        null,
+                };
+                const newFavorites = [...favorites, optimisticItem];
                 setFavorites(newFavorites);
                 setFavoritesCount(newFavorites.length);
                 console.log("Optimistically added to favorites:", item.title);
@@ -134,6 +142,11 @@ export function FavoritesProvider({ children }) {
 
                     if (error) throw error;
                     console.log("Successfully added to database:", item.title);
+                    // Immediately refetch to pull in any backend-populated relations (like updated main_image_url)
+                    // Slight delay in case of eventual consistency
+                    setTimeout(() => {
+                        fetchFavorites();
+                    }, 150);
                 }
             } catch (error) {
                 console.error("Database operation failed, reverting:", error);

@@ -15,6 +15,7 @@ import {
 // When a booking is created (status: pending)
 export const handleBookingCreated = async (booking, itemTitle, renterName) => {
     try {
+        // Notify owner about new booking
         await BookingNotifications.notifyOwnerOfNewBooking(
             booking.owner_id,
             booking.rental_id,
@@ -22,6 +23,18 @@ export const handleBookingCreated = async (booking, itemTitle, renterName) => {
             itemTitle,
             renterName
         );
+
+        // Notify renter that the booking is pending owner approval
+        const renterTemplate =
+            NOTIFICATION_TEMPLATES.BOOKING_SUBMITTED_PENDING_APPROVAL(
+                itemTitle
+            );
+        await createNotification({
+            userId: booking.renter_id,
+            ...renterTemplate,
+            rentalId: booking.rental_id,
+            itemId: booking.item_id,
+        });
     } catch (error) {
         console.error("Failed to send booking created notification:", error);
     }
@@ -706,10 +719,14 @@ export const handleBookingStatusChange = async (
                 oldStatus === "awaiting_owner_confirmation" ||
                 oldStatus === "return_accepted"
             ) {
+                // Renter-facing completion
                 await handleReturnConfirmed(booking, itemTitle, ownerName);
-                // Also notify both parties of final completion
-                await handleBothPartiesNotified(
-                    booking,
+                // Owner-facing completion (route to booking-requests)
+                await ProcessNotifications.notifyBothPartiesOfCompletion(
+                    null, // renterUserId not needed here; will ignore since we tailor below
+                    booking.owner_id,
+                    booking.rental_id,
+                    booking.item_id,
                     itemTitle,
                     isAccommodation
                 );

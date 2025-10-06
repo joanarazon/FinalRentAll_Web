@@ -82,7 +82,12 @@ export default function Favorites() {
                                 ).toLocaleDateString()}
                                 price={String(it.price_per_day)}
                                 quantity={it.quantity}
-                                imageUrl={it.main_image_url || undefined}
+                                imageUrl={
+                                    it.main_image_url ||
+                                    it.imageUrl ||
+                                    it.image_url ||
+                                    undefined
+                                }
                                 isOwner={user?.id === it.user_id}
                                 isFavorited={true}
                                 onHeartClick={() => toggleFavorite(it)}
