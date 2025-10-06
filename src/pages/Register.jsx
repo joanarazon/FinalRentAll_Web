@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/input-otp";
 import { supabase } from "../../supabaseClient";
 import { useToastApi } from "../components/ui/toast";
+import { useNavigate } from "react-router-dom";
+import { useUserContext } from "../context/UserContext.jsx";
 
 function Register() {
     const [step, setStep] = useState(1); // 1 = basic info, 2 = OTP, 3 = Face++
@@ -31,6 +33,8 @@ function Register() {
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
     const toast = useToastApi();
+    const { refresh } = useUserContext();
+    const navigate = useNavigate();
 
     const startCamera = async () => {
         try {
@@ -246,6 +250,16 @@ function Register() {
             }
             try {
                 setLoading(true);
+                // Ensure we still have an auth session before updating password
+                const { data: sessData } = await supabase.auth.getSession();
+                if (!sessData?.session) {
+                    toast.error(
+                        "Your session expired. Please re-enter the OTP to continue."
+                    );
+                    setStep(2);
+                    setLoading(false);
+                    return;
+                }
                 const { error: updatePasswordError } =
                     await supabase.auth.updateUser({
                         password: formData.password,
@@ -332,6 +346,18 @@ function Register() {
                 toast.success(
                     "Registration submitted! Pending admin verification."
                 );
+                // Refresh UserContext to pick up the newly inserted profile row
+                try {
+                    await refresh();
+                } catch (_) {}
+                // Stop camera stream if active to free camera resources
+                try {
+                    if (stream) {
+                        stream.getTracks().forEach((t) => t.stop());
+                    }
+                } catch (_) {}
+                // Redirect to Pending Verification page
+                navigate("/pending-verification", { replace: true });
             } catch (err) {
                 console.error("Error during registration:", err);
                 toast.error("Failed to register: " + err.message);
