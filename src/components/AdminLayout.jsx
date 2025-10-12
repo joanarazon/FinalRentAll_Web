@@ -59,10 +59,6 @@ export default function AdminLayout({ children, className }) {
 
                         {/* Right: bell + profile */}
                         <div className="flex items-center gap-4">
-                            <Button variant="ghost" size="icon">
-                                <Bell className="w-5 h-5 text-gray-600" />
-                            </Button>
-
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -79,10 +75,6 @@ export default function AdminLayout({ children, className }) {
                                     align="end"
                                     className="w-40"
                                 >
-                                    <DropdownMenuItem>Profile</DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                        Settings
-                                    </DropdownMenuItem>
                                     <DropdownMenuItem
                                         className="text-red-600"
                                         onClick={async () => {

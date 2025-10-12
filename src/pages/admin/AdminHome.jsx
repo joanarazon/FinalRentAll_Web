@@ -275,7 +275,7 @@ export default function AdminHome() {
           <div className="relative">
             <div className="flex items-center gap-3 mb-3">
               <h1 className="text-5xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent tracking-tight">
-                Welcome back, {user?.first_name || "Admin"}
+                Welcome back, {"Admin"}
               </h1>
               <Sparkles className="w-8 h-8 text-[#FFAB00] animate-pulse" />
             </div>
