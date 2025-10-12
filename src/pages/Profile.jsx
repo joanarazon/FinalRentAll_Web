@@ -25,6 +25,7 @@ import {
     MapPin,
 } from "lucide-react";
 import TopMenu from "@/components/topMenu";
+import EditProfileModal from "@/components/EditProfileModal";
 import { useNavigate, useParams } from "react-router-dom";
 import { getLessorRatingStats } from "@/lib/reviews";
 import BookItemModal from "@/components/BookItemModal";
@@ -58,6 +59,7 @@ export default function Profile() {
     const [uploading, setUploading] = useState(false);
     const [rentOpen, setRentOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
+    const [editOpen, setEditOpen] = useState(false);
 
     const initials = useMemo(() => {
         const f = (profile?.first_name || "").trim();
@@ -175,11 +177,18 @@ export default function Profile() {
             }
             if (error) throw error;
             // Filter out rejected items in case of fallback query (when item_status column doesn't exist)
-            const filteredData = (data || []).filter((item) => {
+            let filteredData = (data || []).filter((item) => {
                 // If item_status doesn't exist, assume it's approved (legacy items)
                 // If item_status exists, exclude rejected items
                 return !item.item_status || item.item_status !== "rejected";
             });
+
+            // If viewing someone else's profile, also filter out banned items
+            if (!isOwnProfile) {
+                filteredData = filteredData.filter(
+                    (item) => item.item_status !== "banned"
+                );
+            }
 
             const withImages = await Promise.all(
                 filteredData.map(async (it) => ({
@@ -196,7 +205,7 @@ export default function Profile() {
         } finally {
             setLoadingItems(false);
         }
-    }, [profileUserId]);
+    }, [profileUserId, isOwnProfile]);
 
     useEffect(() => {
         if (!profileUserId) return;
@@ -320,10 +329,31 @@ export default function Profile() {
                                 </>
                             ) : (
                                 <>
-                                    <h1 className="text-3xl font-bold text-[#1E1E1E] mb-3">
-                                        {(profile?.first_name || "").trim()}{" "}
-                                        {(profile?.last_name || "").trim()}
-                                    </h1>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h1 className="text-3xl font-bold text-[#1E1E1E]">
+                                            {(profile?.first_name || "").trim()}{" "}
+                                            {(profile?.last_name || "").trim()}
+                                        </h1>
+                                        {isOwnProfile && !loadingProfile && (
+                                            <Button
+                                                variant="outline"
+                                                onClick={() =>
+                                                    setEditOpen(true)
+                                                }
+                                            >
+                                                Edit Profile
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {/* Edit Profile Modal */}
+                                    {isOwnProfile && (
+                                        <EditProfileModal
+                                            open={editOpen}
+                                            onOpenChange={setEditOpen}
+                                            profile={profile}
+                                            onUpdated={loadProfile}
+                                        />
+                                    )}
                                     <div className="flex flex-wrap gap-4 text-sm text-[#1E1E1E]/70 mb-4">
                                         <div className="flex items-center gap-1.5">
                                             <Calendar className="h-4 w-4" />
@@ -586,6 +616,11 @@ function OwnedItemsGrid({ items, isOwner, onChanged, onRent }) {
                                     {it.item_status === "pending" && (
                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                             Under Review
+                                        </span>
+                                    )}
+                                    {isOwner && it.item_status === "banned" && (
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                            Banned
                                         </span>
                                     )}
                                 </div>
