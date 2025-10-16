@@ -23,6 +23,8 @@ function ItemCard({
     onRentClick,
     onMessageOwner,
 }) {
+    const isOutOfStock = quantity <= 0;
+
     return (
         <Card className="w-full overflow-hidden p-0 transition-all duration-200 hover:shadow-lg flex flex-col h-full">
             {imageUrl && (
@@ -48,11 +50,10 @@ function ItemCard({
                         }
                     >
                         <Heart
-                            className={`${
-                                isFavorited
-                                    ? "text-red-500 fill-red-500"
-                                    : "text-gray-500"
-                            }`}
+                            className={`${isFavorited
+                                ? "text-red-500 fill-red-500"
+                                : "text-gray-500"
+                                }`}
                         />
                     </Button>
                     {ratings && (
@@ -110,15 +111,30 @@ function ItemCard({
                                 Message
                             </Button>
                         )}
-                        <Button
+                        {/* <Button
                             size="sm"
-                            className={`flex-1 h-9 ${
-                                isOwner ? "opacity-60 cursor-not-allowed" : ""
-                            }`}
+                            className={`flex-1 h-9 ${isOwner ? "opacity-60 cursor-not-allowed" : ""
+                                }`}
                             disabled={isOwner}
                             onClick={!isOwner ? onRentClick : undefined}
-                        >
-                            {isOwner ? "Your Item" : "Rent Now"}
+                        > */}
+                            <Button
+                                onClick={onRentClick}
+                                size="sm"
+                                disabled={isOutOfStock || isOwner}
+                                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-md hover:shadow-lg ${isOutOfStock
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : isOwner
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'text-white hover:scale-105'
+                                    }`}
+                            >
+                            {isOwner
+                                ? 'Your Item'
+                                : isOutOfStock
+                                    ? 'Out of Stock'
+                                    : 'Rent Now'
+                            }
                         </Button>
                     </div>
                 </div>
