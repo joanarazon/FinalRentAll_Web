@@ -295,7 +295,7 @@ function Login() {
                                 <Mail size={16} />
                                 Email OTP
                             </button>
-                            <button
+                            {/* <button
                                 type="button"
                                 className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
                                     loginMethod === "sms_otp"
@@ -306,7 +306,7 @@ function Login() {
                             >
                                 <Phone size={16} />
                                 Phone OTP
-                            </button>
+                            </button> */}
                         </div>
 
                         {/* Email (shared for password and email OTP) */}
