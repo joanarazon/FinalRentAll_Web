@@ -177,7 +177,7 @@ export default function AdminHome() {
         accentColor: "bg-[#FFAB00]",
       },
       {
-        title: "Renting History",
+        title: "Transaction Tracking",
         description: "View complete rental transaction history",
         count: String(counts.rentingHistory ?? "—"),
         icon: TrendingUp,
