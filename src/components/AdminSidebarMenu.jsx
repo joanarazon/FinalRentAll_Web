@@ -18,7 +18,7 @@ export default function AdminSidebarMenu() {
   const historyItems = [
     {
       to: "/renting-history",
-      label: "Renting History",
+      label: "Transaction Tracking",
       icon: History,
     },
   ]
