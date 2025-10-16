@@ -34,6 +34,7 @@ import Loading from "./components/Loading.jsx";
 import PendingVerification from "./pages/PendingVerification.jsx";
 import Chat from "./components/Chat.jsx";
 import TotalUser from "./pages/admin/pages/TotalUsers.jsx";
+import ForgotPassword from "./pages/admin/pages/ForgotPassword.jsx";
 
 import Banned from "./pages/Banned";
 
@@ -80,6 +81,7 @@ export default function App() {
                             path="/pending-verification"
                             element={<PendingVerification />}
                         />
+                        <Route path="/forgot-password" element={<ForgotPassword />} />
                         {/* User group */}
                         <Route
                             element={
