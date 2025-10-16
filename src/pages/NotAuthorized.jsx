@@ -33,7 +33,7 @@ export default function NotAuthorized() {
                     You don’t have permission to view this page. <br></br>
                     <br></br>
                     If you believe this was a mistake or wish to appeal, please contact our support team at{" "}
-                    <span className="font-semibold">rentall@gmail.com</span> with your registered email and a short explanation.
+                    <span className="font-semibold">rentall@gmail.com</span> with your registered email.
                 </p>
             </div>
 
