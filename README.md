@@ -19,7 +19,7 @@ RentAll connects people who have items with people who need them—short-term, f
     -   Item complaints are stored in `public.complaints`
     -   User/owner complaints are stored in `public.user_complaints`
     -   Admin pages for reviewing and resolving both
--   Admin insights: live KPIs, renting history with filters, and moderation queues
+-   Admin insights: live KPIs, Transaction Tracking with filters, and moderation queues
 
 …and more. The UI is modular so adding new flows and pages stays straightforward.
 
@@ -27,7 +27,7 @@ RentAll connects people who have items with people who need them—short-term, f
 
 -   Renter: discovers items, makes booking requests, leaves item and lessor reviews, files reports
 -   Owner: lists items, manages availability and booking requests (confirm, reject, hold/maintenance), sees complaints on their items via admin review when applicable
--   Admin: reviews reports, monitors KPIs, audits renting history, and resolves complaints
+-   Admin: reviews reports, monitors KPIs, audits Transaction Tracking, and resolves complaints
 
 ## Booking process (overview)
 

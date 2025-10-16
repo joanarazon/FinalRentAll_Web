@@ -25,7 +25,7 @@ function ViewRentingHistory() {
 
   // Fetch categories for dropdown
   useEffect(() => {
-    ;(async () => {
+    ; (async () => {
       try {
         const { data, error } = await supabase.from("categories").select("category_id,name").order("name")
         if (error) throw error
@@ -39,12 +39,12 @@ function ViewRentingHistory() {
   const fetchHistory = async () => {
     setLoading(true)
     try {
-      // Base query with joins
+      // First, get rental transactions with item information
       let query = supabase
         .from("rental_transactions")
         .select(
-          `rental_id, start_date, end_date, status, total_cost, quantity, created_at,
-           items:items ( item_id, title, category_id, main_image_url )`,
+          `rental_id, start_date, end_date, status, total_cost, quantity, created_at, renter_id,
+         items:items ( item_id, title, category_id, main_image_url, user_id )`
         )
         .order("created_at", { ascending: false })
 
@@ -55,11 +55,71 @@ function ViewRentingHistory() {
       if (dateRange?.from) query = query.gte("start_date", dateRange.from.toISOString())
       if (dateRange?.to) query = query.lte("start_date", dateRange.to.toISOString())
 
-      const { data, error } = await query
+      const { data: transactions, error } = await query
       if (error) throw error
-      setRows(data || [])
+
+      console.log("Raw transactions:", transactions)
+
+      // If we have transactions, fetch both renter and lessor data
+      if (transactions && transactions.length > 0) {
+        // Get unique renter IDs
+        const renterIds = transactions
+          .map(t => t.renter_id)
+          .filter(Boolean)
+          .filter((id, index, arr) => arr.indexOf(id) === index)
+
+        // Get unique lessor IDs (item owners)
+        const lessorIds = transactions
+          .map(t => t.items?.user_id)
+          .filter(Boolean)
+          .filter((id, index, arr) => arr.indexOf(id) === index)
+
+        console.log("Renter IDs:", renterIds)
+        console.log("Lessor IDs:", lessorIds)
+
+        // Fetch all users (both renters and lessors) in one query
+        const allUserIds = [...renterIds, ...lessorIds].filter((id, index, arr) => arr.indexOf(id) === index)
+
+        console.log("All User IDs to fetch:", allUserIds)
+
+        if (allUserIds.length > 0) {
+          const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select('id, first_name, last_name')
+            .in('id', allUserIds)
+
+          console.log("Fetched users:", users)
+
+          if (!usersError && users) {
+            // Create maps for easy lookup
+            const usersMap = {}
+            users.forEach(user => {
+              usersMap[user.id] = user
+            })
+
+            // Combine the data
+            const enrichedTransactions = transactions.map(transaction => ({
+              ...transaction,
+              renter: usersMap[transaction.renter_id] || null,
+              lessor: usersMap[transaction.items?.user_id] || null
+            }))
+
+            console.log("Enriched transactions:", enrichedTransactions)
+            setRows(enrichedTransactions)
+          } else {
+            console.error("Error fetching users:", usersError)
+            // Set rows with transactions but without user data
+            setRows(transactions.map(t => ({ ...t, renter: null, lessor: null })))
+          }
+        } else {
+          // No user IDs found, set rows without user data
+          setRows(transactions.map(t => ({ ...t, renter: null, lessor: null })))
+        }
+      } else {
+        setRows([])
+      }
     } catch (e) {
-      console.error("Fetch renting history failed:", e.message || e)
+      console.error("Fetch Transaction Tracking failed:", e.message || e)
       setRows([])
     } finally {
       setLoading(false)
@@ -102,7 +162,7 @@ function ViewRentingHistory() {
           </div>
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-              Renting History
+              Transaction Tracking
             </h1>
             <p className="mt-1 text-gray-600 font-medium">Search and filter all rental transactions</p>
           </div>
@@ -258,7 +318,8 @@ function ViewRentingHistory() {
           <table className="w-full text-left">
             <thead className="bg-gradient-to-r from-gray-100 to-orange-50">
               <tr>
-                <th className="p-4 text-sm font-bold text-gray-700 uppercase tracking-wider">Rental ID</th>
+                <th className="p-4 text-sm font-bold text-gray-700 uppercase tracking-wider">Renter Name</th>
+                <th className="p-4 text-sm font-bold text-gray-700 uppercase tracking-wider">Lessor Name</th>
                 <th className="p-4 text-sm font-bold text-gray-700 uppercase tracking-wider">Start Date</th>
                 <th className="p-4 text-sm font-bold text-gray-700 uppercase tracking-wider">End Date</th>
                 <th className="p-4 text-sm font-bold text-gray-700 uppercase tracking-wider">Item Name</th>
@@ -271,11 +332,30 @@ function ViewRentingHistory() {
               {filtered.map((r, idx) => (
                 <tr
                   key={r.rental_id}
-                  className={`border-b border-gray-100 hover:bg-gradient-to-r hover:from-orange-50 hover:to-amber-50 transition-all ${
-                    idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
-                  }`}
+                  className={`border-b border-gray-100 hover:bg-gradient-to-r hover:from-orange-50 hover:to-amber-50 transition-all ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
+                    }`}
                 >
-                  <td className="p-4 font-mono text-sm font-semibold text-[#FFAB00]">#{r.rental_id}</td>
+                  {/* Renter Name Column */}
+                  <td className="p-4">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-gray-900">
+                        {r.renter ? `${r.renter.first_name} ${r.renter.last_name}` : "Unknown Renter"}
+                      </span>
+                      {/* <span className="text-xs text-gray-500 font-mono mt-1">#{r.rental_id}</span> */}
+                    </div>
+                  </td>
+
+                  <td className="p-4">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-gray-900">
+                        {r.lessor ? `${r.lessor.first_name} ${r.lessor.last_name}` : "Unknown Lessor"}
+                      </span>
+                      <span className="text-xs text-gray-500 font-mono mt-1">
+                        {/* Lessor ID: {r.items?.user_id || "N/A"} */}
+                      </span>
+                    </div>
+                  </td>
+
                   <td className="p-4 font-medium">{new Date(r.start_date).toLocaleDateString()}</td>
                   <td className="p-4 font-medium">{new Date(r.end_date).toLocaleDateString()}</td>
                   <td className="p-4 font-semibold text-gray-900">{r.items?.title || "—"}</td>
