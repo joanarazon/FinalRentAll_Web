@@ -22,10 +22,21 @@ export default function NotAuthorized() {
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#FFFBF2] p-6">
             <h1 className="text-2xl font-semibold mb-2">Not authorized</h1>
-            <p className="text-gray-600 mb-6 text-center max-w-md">
-                You don’t have permission to view this page. If you think this
-                is a mistake, please contact support or try a different account.
-            </p>
+            <br></br>
+            {/* <p className="text-gray-600 mb-4 text-center max-w-md">
+                You don’t have permission to view this page.
+            </p> */}
+
+            {/* Added support message */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 max-w-md">
+                <p className="text-sm text-yellow-800 text-center">
+                    You don’t have permission to view this page. <br></br>
+                    <br></br>
+                    If you believe this was a mistake or wish to appeal, please contact our support team at{" "}
+                    <span className="font-semibold">rentall@gmail.com</span> with your registered email and a short explanation.
+                </p>
+            </div>
+
             <Button onClick={() => navigate(goBackTarget)}>Go Back</Button>
         </div>
     );
