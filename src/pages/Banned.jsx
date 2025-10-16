@@ -18,10 +18,13 @@ export default function Banned() {
                 <h1 className="text-2xl font-bold text-red-700 mb-2">
                     Account Banned
                 </h1>
-                <p className="mb-4 text-gray-700">
-                    Your account has been banned. If you believe this is a
-                    mistake, please contact support.
+                <p className="text-center">
+                    You don't have permission to view this page. <br />
+                    <br />
+                    If you believe this was a mistake or wish to appeal, please contact our support team at{" "}
+                    <span className="font-semibold">rentall@gmail.com</span> with your registered email.
                 </p>
+                <br/>
                 <Button
                     onClick={handleLogout}
                     className="bg-red-600 text-white hover:bg-red-700 w-full"
