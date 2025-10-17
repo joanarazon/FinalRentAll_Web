@@ -22,6 +22,13 @@ export default function PendingUser() {
   const toast = useToastApi()
   const [previewUser, setPreviewUser] = useState(null)
 
+  const formatDateDob = (date) => {
+    if (!date) return "—"
+    const d = new Date(date)
+    if (isNaN(d)) return "—"
+    return d.toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })
+  }
+
   // Fetch pending users (role = 'unverified')
   const fetchUsers = async () => {
     const MIN_DURATION = 1000
@@ -31,7 +38,7 @@ export default function PendingUser() {
       setError(null)
       const { data, error: fetchErr } = await supabase
         .from("users")
-        .select("id, first_name, last_name, created_at, id_image_url, face_image_url, face_verified, role")
+        .select("id, first_name, last_name, created_at, id_image_url, face_image_url, face_verified, role, dob")
         .eq("role", "unverified")
         .order("created_at", { ascending: false })
       if (fetchErr) throw fetchErr
@@ -294,7 +301,13 @@ export default function PendingUser() {
                     User Name
                   </th>
                   <th className="p-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Date of Birth
+                  </th>
+                  <th className="p-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     ID Document
+                  </th>
+                  <th className="p-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Face Document
                   </th>
                   <th className="p-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Actions
@@ -352,6 +365,11 @@ export default function PendingUser() {
                           </div>
                         </td>
                         <td className="p-4">
+                          <span className="text-sm text-gray-700">
+                            {formatDateDob(u.dob)}
+                          </span>
+                        </td>
+                        <td className="p-4">
                           {u.id_image_url ? (
                             <button
                               onClick={() => setPreviewUser(u)}
@@ -362,6 +380,20 @@ export default function PendingUser() {
                           ) : (
                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                               No Document
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          {u.face_image_url ? (
+                            <button
+                              onClick={() => setPreviewUser({ ...u, previewType: "face" })}
+                              className="text-sm text-blue-600 hover:text-blue-800 font-medium underline decoration-2 underline-offset-2 transition-colors"
+                            >
+                              View Document
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                              No Face Image
                             </span>
                           )}
                         </td>
@@ -432,8 +464,16 @@ export default function PendingUser() {
               {previewUser.id_image_url ? (
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
                   <img
-                    src={previewUser.id_image_url || "/placeholder.svg"}
-                    alt="User ID Document"
+                    src={
+                      previewUser.previewType === "face"
+                        ? previewUser.face_image_url || "/placeholder.svg"
+                        : previewUser.id_image_url || "/placeholder.svg"
+                    }
+                    alt={
+                      previewUser.previewType === "face"
+                        ? "User Face Document"
+                        : "User ID Document"
+                    }
                     className="w-full h-auto rounded-lg"
                   />
                 </div>
