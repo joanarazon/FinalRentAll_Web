@@ -45,7 +45,7 @@ export default function TotalUser() {
       const { data, error: fetchErr } = await supabase
         .from("users")
         .select(
-          "id, first_name, last_name, created_at, id_image_url, face_image_url, face_verified, role, profile_pic_url, updated_at",
+          "id, first_name, last_name, created_at, id_image_url, face_image_url, face_verified, role, profile_pic_url, updated_at, dob",
         )
         .order("created_at", { ascending: false })
       if (fetchErr) throw fetchErr
@@ -298,7 +298,7 @@ export default function TotalUser() {
             </div>
 
             {/* Email Filter */}
-            
+
             {/* Status Filter */}
             <div className="space-y-2">
               <label className="block text-xs font-medium text-gray-700">Account Status</label>
@@ -413,6 +413,7 @@ export default function TotalUser() {
                   <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">ID Photo</th>
                   <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Account Status</th>
                   <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Date Joined</th>
+                  <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Date of Birth</th>
                   <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Verification</th>
                 </tr>
               </thead>
@@ -475,6 +476,14 @@ export default function TotalUser() {
                           <div className="flex items-center gap-2">
                             <CalendarIcon className="w-4 h-4 text-gray-400" />
                             <span className="text-sm text-gray-700">{formatDate(user.created_at)}</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <CalendarIcon className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm text-gray-700">
+                              {user.dob ? formatDate(user.dob) : "—"}
+                            </span>
                           </div>
                         </td>
                         <td className="p-4">{getVerificationBadge(user.face_verified)}</td>
@@ -553,7 +562,7 @@ export default function TotalUser() {
                         {(previewUser.first_name || "") + " " + (previewUser.last_name || "")}
                       </p>
                     </div>
-                   
+
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-white p-4 rounded-lg border border-gray-200">
                         <p className="text-xs text-gray-500 mb-2">Status</p>
