@@ -1158,7 +1158,7 @@ function ActionBar({
 }
 
 function ImagePreviewThumb({ src, alt }) {
-    const imgSrc = src || "/vite.svg";
+    const imgSrc = src || "/logo.png";
     return (
         <Dialog>
             <DialogTrigger asChild>
@@ -1213,7 +1213,7 @@ function RequestDetailsDialog({ row, awaiting = false }) {
                 </DialogHeader>
                 <div className="mb-4">
                     <img
-                        src={row.items?.main_image_url || "/vite.svg"}
+                        src={row.items?.main_image_url || "/logo.png"}
                         alt={row.items?.title || "Item"}
                         className="w-full h-48 object-cover rounded-lg border-2 border-[#1E1E1E]/10"
                         onError={(e) =>

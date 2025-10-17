@@ -111,7 +111,7 @@ export const NotificationProvider = ({ children }) => {
                         if (Notification.permission === "granted") {
                             new Notification(newNotification.title, {
                                 body: newNotification.message,
-                                icon: "/vite.svg",
+                                icon: "/logo.png",
                                 tag: `notification-${newNotification.notification_id}`,
                             });
                         }

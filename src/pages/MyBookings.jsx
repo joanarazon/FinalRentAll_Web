@@ -1358,7 +1358,7 @@ function RateItemButton({ rental }) {
 }
 
 function ImagePreviewThumb({ src, alt }) {
-    const imgSrc = src || "/vite.svg";
+    const imgSrc = src || "/logo.png";
     return (
         <Dialog>
             <DialogTrigger asChild>
@@ -1414,7 +1414,7 @@ function DetailsModal({ rental, user, categories }) {
                 </DialogHeader>
                 <div className="mb-4">
                     <img
-                        src={rental.items?.main_image_url || "/vite.svg"}
+                        src={rental.items?.main_image_url || "/logo.png"}
                         alt={rental.items?.title || "Item"}
                         className="w-full h-48 object-cover rounded-lg border-2 border-[#1E1E1E]/10"
                         onError={(e) =>

@@ -29,10 +29,9 @@ export default function AdminSidebarMenu() {
   ]
 
   const linkClass = (to) =>
-    `justify-start w-full transition-all duration-200 ${
-      location.pathname === to
-        ? "bg-[#FFAB00]/10 text-[#FFAB00] font-semibold border-l-4 border-[#FFAB00] hover:bg-[#FFAB00]/15"
-        : "hover:bg-gray-100 hover:text-gray-900"
+    `justify-start w-full transition-all duration-200 ${location.pathname === to
+      ? "bg-[#FFAB00]/10 text-[#FFAB00] font-semibold border-l-4 border-[#FFAB00] hover:bg-[#FFAB00]/15"
+      : "hover:bg-gray-100 hover:text-gray-900"
     }`
 
   const renderSection = (items, title) => (
@@ -53,8 +52,12 @@ export default function AdminSidebarMenu() {
     <div className="flex flex-col h-full">
       <div className="px-4 py-6 border-b border-gray-200">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#FFAB00] to-[#FF8C00] flex items-center justify-center">
-            <span className="text-white font-bold text-xl">R</span>
+          <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-200">
+            <img
+              src="/logo.png"
+              alt="RentAll Logo"
+              className="w-full h-full object-cover"
+            />
           </div>
           <div>
             <p className="text-xl font-bold text-gray-900">RentAll</p>

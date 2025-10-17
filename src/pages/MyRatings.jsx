@@ -192,7 +192,7 @@ export default function MyRatings() {
 }
 
 function ImagePreviewThumb({ src, alt }) {
-    const imgSrc = src || "/vite.svg";
+    const imgSrc = src || "/logo.png";
     return (
         <Dialog>
             <DialogTrigger asChild>
