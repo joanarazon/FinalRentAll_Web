@@ -12,7 +12,7 @@ import {
 import { useNotifications } from "../context/NotificationContext";
 import { NOTIFICATION_TYPES } from "../lib/notifications";
 import NotificationItem from "./NotificationItem";
-import Loading from "./Loading";
+// import Loading from "./Loading";
 
 const NotificationPanel = ({
     onNavigate,
@@ -86,13 +86,13 @@ const NotificationPanel = ({
         await markAllAsRead();
     };
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center p-8">
-                <Loading />
-            </div>
-        );
-    }
+    // if (loading) {
+    //     return (
+    //         <div className="flex items-center justify-center p-8">
+    //             <Loading />
+    //         </div>
+    //     );
+    // }
 
     const filteredNotifications = getFilteredNotifications();
     const hasNotifications = notifications.length > 0;
