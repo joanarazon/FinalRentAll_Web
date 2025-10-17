@@ -144,7 +144,6 @@ export default function TopMenu({ activePage, searchTerm, setSearchTerm }) {
                         )} cursor-pointer relative`}
                         onClick={handleNotification}
                     >
-                        <Bell className="h-4 w-4 mr-2" />
                         Notifications
                         {unreadCount > 0 && (
                             <Badge
