@@ -37,8 +37,8 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-6">
-      <div className="w-full max-w-md bg-[#FAF5EF] rounded-3xl shadow-lg p-8">
+    <div className="min-h-screen  bg-gray-100 flex items-center justify-center p-6">
+      <div className="w-full max-w-md  bg-white shadow-lg rounded-2xl flex flex-col items-center p-6">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 font-dm-bold mb-3">
@@ -61,7 +61,7 @@ const ForgotPassword = () => {
               placeholder="juan@gmail.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-12 px-5 rounded-xl border border-gray-300 bg-white/90 text-gray-900 placeholder-gray-400 font-dm-regular focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-transparent transition-all"
+              className="shadow appearance-none border rounded-lg w-full py-3 px-20 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400 mb-1"
               required
             />
           </div>
@@ -88,8 +88,8 @@ const ForgotPassword = () => {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full h-12 rounded-2xl bg-gray-900 text-white font-dm-bold text-base transition-all flex items-center justify-center ${
-              loading ? "opacity-60 cursor-not-allowed" : "hover:bg-gray-800 hover:shadow-lg"
+            className={`w-full h-12 rounded-2xl bg-[#1e1e1e] text-white font-dm-bold text-base transition-all flex items-center justify-center ${
+              loading ? "opacity-60 cursor-not-allowed" : "hover:bg-[#F09B35] cursor-pointer text-white font-bold rounded-lg w-full focus:outline-none focus:shadow-outline disabled:opacity-50 flex items-center justify-center gap-2"
             }`}
           >
             {loading ? (
