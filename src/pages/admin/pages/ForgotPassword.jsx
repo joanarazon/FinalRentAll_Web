@@ -10,7 +10,7 @@ const ForgotPassword = () => {
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
-    
+
     if (!email) {
       setError("Please enter your email address.");
       return;
@@ -20,7 +20,7 @@ const ForgotPassword = () => {
       setLoading(true);
       setError("");
       setMessage("");
-      
+
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
@@ -52,18 +52,21 @@ const ForgotPassword = () => {
         {/* Form */}
         <form onSubmit={handleResetPassword} className="space-y-6">
           {/* Email Input */}
-          <div>
+          <div className="flex flex-col items-start">
             <label className="block text-gray-900 font-dm-bold text-base mb-2">
               Email
             </label>
-            <input
-              type="email"
-              placeholder="juan@gmail.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="shadow appearance-none border rounded-lg w-full py-3 px-20 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400 mb-1"
-              required
-            />
+
+            <div className="relative w-[20rem] max-w-full">
+              <input
+                type="email"
+                placeholder="juan@gmail.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400 text-left"
+                required
+              />
+            </div>
           </div>
 
           {/* Success Message */}
@@ -88,9 +91,8 @@ const ForgotPassword = () => {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full h-12 rounded-2xl bg-[#1e1e1e] text-white font-dm-bold text-base transition-all flex items-center justify-center ${
-              loading ? "opacity-60 cursor-not-allowed" : "hover:bg-[#F09B35] cursor-pointer text-white font-bold rounded-lg w-full focus:outline-none focus:shadow-outline disabled:opacity-50 flex items-center justify-center gap-2"
-            }`}
+            className={`w-full h-12 rounded-2xl bg-[#1e1e1e] text-white font-dm-bold text-base transition-all flex items-center justify-center ${loading ? "opacity-60 cursor-not-allowed" : "hover:bg-[#F09B35] cursor-pointer text-white font-bold rounded-lg w-full focus:outline-none focus:shadow-outline disabled:opacity-50 flex items-center justify-center gap-2"
+              }`}
           >
             {loading ? (
               <div className="flex items-center space-x-2">
