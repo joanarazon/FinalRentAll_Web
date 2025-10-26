@@ -160,7 +160,7 @@ export function useRecommendations(userId) {
       // Use cache if:
       // 1. Behavior hasn't changed AND
       // 2. Cache is less than 5 minutes old
-      if (recommendationCache.behaviorHash === currentHash && timeSinceLastCall < 5 * 60 * 1000) {
+      if (recommendationCache.behaviorHash === currentHash && timeSinceLastCall < 20 * 60 * 1000) {
         console.log('✅ Using cached recommendations (age: ' + Math.round(timeSinceLastCall / 1000) + 's)');
         setRecommendations(recommendationCache.recommendations);
         setUserProfile(recommendationCache.profile);
@@ -192,7 +192,7 @@ export function useRecommendations(userId) {
           recommendedIds.includes(item.item_id || item.raw?.item_id)
         );
 
-        console.log('📦 Filtered to', recommendedItems.length, 'matching items');
+        console.log('📦 Filtered to', recommendedItems.length, 'matching items')z;
 
         recommendedItems.sort((a, b) => {
           const aId = a.item_id || a.raw?.item_id;
