@@ -192,7 +192,7 @@ export function useRecommendations(userId) {
           recommendedIds.includes(item.item_id || item.raw?.item_id)
         );
 
-        console.log('📦 Filtered to', recommendedItems.length, 'matching items')z;
+        console.log('📦 Filtered to', recommendedItems.length, 'matching items');
 
         recommendedItems.sort((a, b) => {
           const aId = a.item_id || a.raw?.item_id;
