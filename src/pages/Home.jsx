@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useUser } from "../hooks/useUser";
+import { useRecommendations } from "../hooks/useRecommendations";
 import TopMenu from "../components/topMenu";
 import ItemCard from "../components/ItemCard";
 import AddItemModal from "../components/AddItemModal";
+import RecommendationsSection from "../components/RecommendationsSection";
 import { supabase } from "../../supabaseClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import BookItemModal from "../components/BookItemModal";
@@ -14,25 +16,34 @@ import { useNavigate } from "react-router-dom";
 
 function Home() {
     const user = useUser();
+    const navigate = useNavigate();
     const [addOpen, setAddOpen] = useState(false);
-    const [categories, setCategories] = useState([]); // {category_id, name}
+    const [categories, setCategories] = useState([]);
     const [selectedCategoryId, setSelectedCategoryId] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
     const [bookOpen, setBookOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
-
     const [selectedLocation, setSelectedLocation] = useState("");
     const [priceRange, setPriceRange] = useState([0, 1000]);
     const [maxPrice, setMaxPrice] = useState(1000);
-    const navigate = useNavigate();
 
     const { favorites, toggleFavorite, isFavorited } = useFavorites();
 
+    // Initialize recommendations hook
+    const {
+        recommendations,
+        loading: recsLoading,
+        userProfile,
+        trackItemView,
+        trackFavorite,
+        trackSearch,
+        fetchRecommendations
+    } = useRecommendations(user?.id);
+
     const getOrCreateConversation = async (currentUserId, otherUserId, itemId, itemTitle) => {
         try {
-            // Check if conversation already exists
             const { data: existingConversation, error: checkError } = await supabase
                 .from("conversations")
                 .select("id")
@@ -49,7 +60,6 @@ function Home() {
                 return existingConversation.id;
             }
 
-            // Create new conversation
             const { data: newConversation, error: createError } = await supabase
                 .from("conversations")
                 .insert([
@@ -177,7 +187,6 @@ function Home() {
                                 { data: consumeRows, error: cErr },
                                 { data: departedRows, error: dErr },
                             ] = await Promise.all([
-                                // Count ALL consuming rentals (confirmed bookings reduce availability regardless of dates)
                                 supabase
                                     .from("rental_transactions")
                                     .select(
@@ -185,7 +194,6 @@ function Home() {
                                     )
                                     .eq("item_id", it.item_id)
                                     .in("status", consumingStatuses),
-                                // Only count departed/returned rentals that overlap with today (can add back capacity for today)
                                 supabase
                                     .from("rental_transactions")
                                     .select(
@@ -200,16 +208,6 @@ function Home() {
                             if (cErr) throw cErr;
                             if (dErr) throw dErr;
 
-                            // Debug logging for Home page
-                            console.log(
-                                "Home availability check for item:",
-                                it.item_id
-                            );
-                            console.log("Today date:", todayStr);
-                            console.log("Total item quantity:", it.quantity);
-                            console.log("Consuming bookings:", consumeRows);
-                            console.log("Departed bookings:", departedRows);
-
                             const sum = (rows) =>
                                 (rows || []).reduce(
                                     (acc, r) => acc + (Number(r.quantity) || 0),
@@ -218,18 +216,12 @@ function Home() {
                             const consumeSum = sum(consumeRows);
                             const departedSum = sum(departedRows);
 
-                            console.log("Consume sum:", consumeSum);
-                            console.log("Departed sum:", departedSum);
-
                             const baseCapacity =
                                 (Number(it.quantity) || 0) + departedSum;
                             const remaining = Math.max(
                                 0,
                                 baseCapacity - consumeSum
                             );
-
-                            console.log("Base capacity:", baseCapacity);
-                            console.log("Home remaining units:", remaining);
 
                             return remaining;
                         } catch (e) {
@@ -295,6 +287,27 @@ function Home() {
         fetchItems();
     }, [fetchItems]);
 
+    // Track search terms with debounce
+    useEffect(() => {
+        if (searchTerm && searchTerm.trim().length > 0) {
+            const debounce = setTimeout(() => {
+                trackSearch(searchTerm);
+            }, 1000);
+            return () => clearTimeout(debounce);
+        }
+    }, [searchTerm, trackSearch]);
+
+    // Fetch recommendations after items are loaded
+    useEffect(() => {
+        if (user?.id && items.length > 0 && !loading && categories.length > 0) {
+            const timer = setTimeout(() => {
+                console.log('Fetching recommendations with', items.length, 'items');
+                fetchRecommendations(items, categories);
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [user?.id, items.length, loading, categories.length]);
+
     useEffect(() => {
         const channel = supabase
             .channel("items_changes")
@@ -354,6 +367,44 @@ function Home() {
         priceRange[0] !== 0 ||
         priceRange[1] !== maxPrice;
 
+    // Enhanced toggle favorite with tracking
+    const handleToggleFavorite = useCallback((item) => {
+        const itemId = item.item_id || item.raw?.item_id;
+        const wasFavorited = isFavorited(itemId);
+        toggleFavorite(item);
+        trackFavorite(item.raw || item, !wasFavorited);
+    }, [toggleFavorite, isFavorited, trackFavorite]);
+
+    // Handle item click (for booking) with tracking
+    const handleItemClick = useCallback((item) => {
+        trackItemView(item.raw || item);
+        setSelectedItem(item.raw || item);
+        setBookOpen(true);
+    }, [trackItemView]);
+
+    // Handle message owner with tracking
+    const handleMessageOwner = useCallback(async (item) => {
+        trackItemView(item.raw || item);
+        try {
+            let conversationId = await getOrCreateConversation(
+                user.id,
+                item.ownerId,
+                item.raw?.item_id || item.item_id,
+                item.title
+            );
+            navigateToChat(conversationId, item.ownerId, item.title, item.raw?.item_id || item.item_id);
+        } catch (error) {
+            console.error("Error starting conversation:", error);
+            import("sweetalert2").then(({ default: Swal }) =>
+                Swal.fire({
+                    icon: "error",
+                    title: "Error",
+                    text: "Failed to start conversation. Please try again.",
+                })
+            );
+        }
+    }, [user, trackItemView]);
+
     if (!user) return <p>Loading...</p>;
 
     return (
@@ -364,12 +415,11 @@ function Home() {
                 setSearchTerm={setSearchTerm}
             />
 
-            {/* Filters - non-sticky to avoid overlap issues */}
+            {/* Filters */}
             <div className="bg-card border-b border-border shadow-sm">
                 <div className="px-4 md:px-8 lg:px-16 xl:px-24 py-4">
                     {/* Desktop: All filters in one row */}
                     <div className="hidden md:flex items-center gap-4 flex-wrap">
-                        {/* Category Dropdown */}
                         <div className="relative min-w-[180px]">
                             <select
                                 value={selectedCategoryId}
@@ -391,7 +441,6 @@ function Home() {
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
 
-                        {/* Location Dropdown */}
                         <div className="relative min-w-[180px]">
                             <select
                                 value={selectedLocation}
@@ -410,7 +459,6 @@ function Home() {
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
 
-                        {/* Price Range */}
                         <div className="flex items-center gap-3 min-w-[320px]">
                             <span className="text-sm font-medium text-foreground whitespace-nowrap">
                                 Price:
@@ -429,7 +477,6 @@ function Home() {
                                                 0,
                                                 Number(e.target.value) || 0
                                             );
-                                            // Only enforce min <= max if max is set
                                             if (
                                                 priceRange[1] > 0 &&
                                                 value > priceRange[1]
@@ -477,7 +524,6 @@ function Home() {
                             </div>
                         </div>
 
-                        {/* Clear Filters Button */}
                         {hasActiveFilters && (
                             <button
                                 onClick={clearFilters}
@@ -490,7 +536,6 @@ function Home() {
 
                     {/* Mobile: Stacked filters */}
                     <div className="flex md:hidden flex-col gap-3">
-                        {/* Category Dropdown */}
                         <div className="relative">
                             <select
                                 value={selectedCategoryId}
@@ -511,7 +556,6 @@ function Home() {
                             </select>
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
-                        {/* Location Dropdown */}
                         <div className="relative">
                             <select
                                 value={selectedLocation}
@@ -529,7 +573,6 @@ function Home() {
                             </select>
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
-                        {/* Price Range */}
                         <div className="bg-background border-2 border-border rounded-lg px-4 py-4">
                             <div className="flex items-center justify-between mb-4">
                                 <span className="text-sm font-medium text-foreground">
@@ -540,7 +583,6 @@ function Home() {
                                 </span>
                             </div>
 
-                            {/* Input Fields */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-xs font-medium text-muted-foreground mb-2">
@@ -559,7 +601,6 @@ function Home() {
                                                     0,
                                                     Number(e.target.value) || 0
                                                 );
-                                                // Only enforce min <= max if max is set
                                                 if (
                                                     priceRange[1] > 0 &&
                                                     value > priceRange[1]
@@ -608,8 +649,7 @@ function Home() {
                                     </div>
                                 </div>
                             </div>
-                        </div>{" "}
-                        {/* Clear Filters Button */}
+                        </div>
                         {hasActiveFilters && (
                             <button
                                 onClick={clearFilters}
@@ -624,9 +664,24 @@ function Home() {
 
             {/* Main Content Area */}
             <div className="px-4 md:px-8 lg:px-16 xl:px-24 mt-8">
+                {/* Recommendations Section */}
+                {recommendations.length > 0 && (
+                    <RecommendationsSection
+                        recommendations={recommendations}
+                        loading={recsLoading}
+                        userProfile={userProfile}
+                        user={user}
+                        isFavorited={isFavorited}
+                        toggleFavorite={handleToggleFavorite}
+                        onItemClick={handleItemClick}
+                        onMessageOwner={handleMessageOwner}
+                    />
+                )}
+
+                {/* All Items Section */}
                 <div className="flex items-center justify-between mb-6">
                     <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
-                        Available Items
+                        {recommendations.length > 0 ? 'All Items' : 'Available Items'}
                     </h1>
                     <span className="text-sm text-muted-foreground">
                         {filteredItems.length}{" "}
@@ -682,36 +737,11 @@ function Home() {
                                     imageUrl={item.imageUrl}
                                     isOwner={user?.id === item.ownerId}
                                     isFavorited={isFavorited(item.raw?.item_id)}
-                                    onHeartClick={() => toggleFavorite(item.raw || item)}
-                                    onRentClick={() => {
-                                        setSelectedItem(item.raw || item);
-                                        setBookOpen(true);
-                                    }}
+                                    onHeartClick={() => handleToggleFavorite(item.raw || item)}
+                                    onRentClick={() => handleItemClick(item)}
                                     onMessageOwner={
                                         user?.id !== item.ownerId
-                                            ? async () => {
-                                                try {
-                                                    // Check if conversation exists or create new one
-                                                    let conversationId = await getOrCreateConversation(
-                                                        user.id,
-                                                        item.ownerId,
-                                                        item.raw?.item_id || item.item_id,
-                                                        item.title
-                                                    );
-
-                                                    // Navigate to chat with conversation details
-                                                    navigateToChat(conversationId, item.ownerId, item.title, item.raw?.item_id || item.item_id);
-                                                } catch (error) {
-                                                    console.error("Error starting conversation:", error);
-                                                    import("sweetalert2").then(({ default: Swal }) =>
-                                                        Swal.fire({
-                                                            icon: "error",
-                                                            title: "Error",
-                                                            text: "Failed to start conversation. Please try again.",
-                                                        })
-                                                    );
-                                                }
-                                            }
+                                            ? () => handleMessageOwner(item)
                                             : undefined
                                     }
                                 />
