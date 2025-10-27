@@ -10,9 +10,9 @@ import {
     DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { useNotifications } from "../context/NotificationContext";
+import { useUserContext } from "../context/UserContext";  // ✅ Add this
 import { NOTIFICATION_TYPES } from "../lib/notifications";
 import NotificationItem from "./NotificationItem";
-// import Loading from "./Loading";
 
 const NotificationPanel = ({
     onNavigate,
@@ -28,6 +28,9 @@ const NotificationPanel = ({
         getNotificationsByType,
         getUnreadNotifications,
     } = useNotifications();
+
+    const { user } = useUserContext();  // ✅ Get current user
+    const userRole = user?.role;  // ✅ Extract role
 
     const [activeTab, setActiveTab] = useState("all");
     const [typeFilter, setTypeFilter] = useState(null);
@@ -86,14 +89,6 @@ const NotificationPanel = ({
         await markAllAsRead();
     };
 
-    // if (loading) {
-    //     return (
-    //         <div className="flex items-center justify-center p-8">
-    //             <Loading />
-    //         </div>
-    //     );
-    // }
-
     const filteredNotifications = getFilteredNotifications();
     const hasNotifications = notifications.length > 0;
 
@@ -148,6 +143,7 @@ const NotificationPanel = ({
                                         notification={notification}
                                         onMarkAsRead={markAsRead}
                                         onNavigate={onNavigate}
+                                        userRole={userRole}  // ✅ Pass userRole
                                         compact={true}
                                     />
                                 ))}
@@ -293,6 +289,7 @@ const NotificationPanel = ({
                             notifications={filteredNotifications}
                             onMarkAsRead={markAsRead}
                             onNavigate={onNavigate}
+                            userRole={userRole}  // ✅ Pass userRole
                             emptyMessage="No notifications yet"
                             emptyDescription="We'll notify you when something happens"
                         />
@@ -303,6 +300,7 @@ const NotificationPanel = ({
                             notifications={filteredNotifications}
                             onMarkAsRead={markAsRead}
                             onNavigate={onNavigate}
+                            userRole={userRole}  // ✅ Pass userRole
                             emptyMessage="No unread notifications"
                             emptyDescription="You're all caught up!"
                         />
@@ -313,6 +311,7 @@ const NotificationPanel = ({
                             notifications={filteredNotifications}
                             onMarkAsRead={markAsRead}
                             onNavigate={onNavigate}
+                            userRole={userRole}  // ✅ Pass userRole
                             emptyMessage="No booking notifications"
                             emptyDescription="Booking updates and status changes will appear here"
                         />
@@ -323,6 +322,7 @@ const NotificationPanel = ({
                             notifications={filteredNotifications}
                             onMarkAsRead={markAsRead}
                             onNavigate={onNavigate}
+                            userRole={userRole}  // ✅ Pass userRole
                             emptyMessage="No item notifications"
                             emptyDescription="Updates about your items will appear here"
                         />
@@ -333,6 +333,7 @@ const NotificationPanel = ({
                             notifications={filteredNotifications}
                             onMarkAsRead={markAsRead}
                             onNavigate={onNavigate}
+                            userRole={userRole}  // ✅ Pass userRole
                             emptyMessage="No reminders"
                             emptyDescription="Important reminders and deadlines will appear here"
                         />
@@ -347,6 +348,7 @@ const NotificationList = ({
     notifications,
     onMarkAsRead,
     onNavigate,
+    userRole,  // ✅ Add this param
     emptyMessage,
     emptyDescription,
 }) => {
@@ -370,6 +372,7 @@ const NotificationList = ({
                     notification={notification}
                     onMarkAsRead={onMarkAsRead}
                     onNavigate={onNavigate}
+                    userRole={userRole}  // ✅ Pass userRole
                 />
             ))}
         </div>

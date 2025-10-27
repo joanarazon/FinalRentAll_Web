@@ -60,8 +60,14 @@ export const NOTIFICATION_TEMPLATES = {
     }),
 
     RENTAL_STARTED: (itemTitle, renterName) => ({
-        title: "Rental Started",
+        title: "Rental Booking Started",
         message: `${renterName} confirmed pickup of "${itemTitle}". Rental is now active.`,
+        type: NOTIFICATION_TYPES.RENTAL,
+    }),
+
+    RENTAL_STARTED: (itemTitle, ownerName) => ({
+        title: "Rental Started",
+        message: `${ownerName} confirmed pickup of "${itemTitle}". Rental is now active.`,
         type: NOTIFICATION_TYPES.RENTAL,
     }),
 

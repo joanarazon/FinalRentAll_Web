@@ -45,6 +45,7 @@ import {
     DropdownMenuItem,
     DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { sendFCMNotificationFromWeb } from "../hooks/notification";
 
 const PROOF_BUCKET = "proof-of-deposit";
 
@@ -303,21 +304,19 @@ export default function MyBookings() {
                                 <button
                                     key={tab.key}
                                     onClick={() => setActiveTab(tab.key)}
-                                    className={`group relative flex items-center gap-2.5 px-5 py-3 rounded-xl font-semibold text-sm whitespace-nowrap transition-all duration-300 ${
-                                        isActive
-                                            ? "bg-gradient-to-r from-[#FFAB00] to-[#FFAB00]/90 text-[#1E1E1E] shadow-lg shadow-[#FFAB00]/30 scale-105"
-                                            : "bg-transparent text-[#1E1E1E]/60 hover:bg-[#FAF5EF] hover:text-[#1E1E1E] hover:scale-102"
-                                    }`}
+                                    className={`group relative flex items-center gap-2.5 px-5 py-3 rounded-xl font-semibold text-sm whitespace-nowrap transition-all duration-300 ${isActive
+                                        ? "bg-gradient-to-r from-[#FFAB00] to-[#FFAB00]/90 text-[#1E1E1E] shadow-lg shadow-[#FFAB00]/30 scale-105"
+                                        : "bg-transparent text-[#1E1E1E]/60 hover:bg-[#FAF5EF] hover:text-[#1E1E1E] hover:scale-102"
+                                        }`}
                                 >
                                     <span className="relative z-10">
                                         {tab.label}
                                     </span>
                                     <Badge
-                                        className={`relative z-10 ${
-                                            isActive
-                                                ? "bg-[#1E1E1E] text-white shadow-md"
-                                                : "bg-[#1E1E1E]/10 text-[#1E1E1E]/70 group-hover:bg-[#FFAB00]/20"
-                                        } border-none font-bold px-2.5 py-0.5 text-xs transition-all`}
+                                        className={`relative z-10 ${isActive
+                                            ? "bg-[#1E1E1E] text-white shadow-md"
+                                            : "bg-[#1E1E1E]/10 text-[#1E1E1E]/70 group-hover:bg-[#FFAB00]/20"
+                                            } border-none font-bold px-2.5 py-0.5 text-xs transition-all`}
                                     >
                                         {count}
                                     </Badge>
@@ -420,18 +419,18 @@ export default function MyBookings() {
                                                 status={String(r.status || "")}
                                                 labelsOverride={
                                                     r.items?.category_id &&
-                                                    isAccommodationAny(
-                                                        r.items.category_id,
-                                                        categories
-                                                    )
+                                                        isAccommodationAny(
+                                                            r.items.category_id,
+                                                            categories
+                                                        )
                                                         ? {
-                                                              on_the_way:
-                                                                  "Check-in",
-                                                              ongoing:
-                                                                  "Checked-in",
-                                                              awaiting_owner_confirmation:
-                                                                  "Checkout",
-                                                          }
+                                                            on_the_way:
+                                                                "Check-in",
+                                                            ongoing:
+                                                                "Checked-in",
+                                                            awaiting_owner_confirmation:
+                                                                "Checkout",
+                                                        }
                                                         : null
                                                 }
                                             />
@@ -544,11 +543,8 @@ function ActionBar({ tabKey, rental, user, onChanged, categories }) {
         if (isAccommodationAny(rental.items?.category_id, categories || [])) {
             primary = <MarkCheckout rental={rental} onChanged={onChanged} />;
         } else {
-            if (isEligibleReturn(rental)) {
-                primary = (
-                    <MarkReturned rental={rental} onChanged={onChanged} />
-                );
-            }
+            // ✅ FIXED: Always show "Mark as Returned" for ongoing rentals
+            primary = <MarkReturned rental={rental} onChanged={onChanged} />;
         }
     } else if (tabKey === "completed") {
         primary = (
@@ -867,10 +863,10 @@ function MarkReturned({ rental, onChanged }) {
                 .from("rental_transactions")
                 .select(
                     `
-                    *,
-                    items!inner(title, user_id),
-                    renter:renter_id(first_name, last_name)
-                `
+          *,
+          items!inner(title, user_id),
+          renter:renter_id(first_name, last_name)
+        `
                 )
                 .eq("rental_id", rental.rental_id)
                 .single();
@@ -887,18 +883,32 @@ function MarkReturned({ rental, onChanged }) {
                 .in("status", ["confirmed", "ongoing"]);
             if (error) throw error;
 
-            toast.success(
-                "Marked as returned. Waiting for owner confirmation."
-            );
+            toast.success("Marked as returned. Waiting for owner confirmation.");
 
-            // Trigger notification to owner
+            // ✅ SEND BOTH NOTIFICATIONS
+            const renterName = bookingDetails.renter
+                ? `${bookingDetails.renter.first_name || ""} ${bookingDetails.renter.last_name || ""}`.trim()
+                : "The renter";
+
+            // 1️⃣ Send FCM notification to mobile owner
             try {
-                const renterName = bookingDetails.renter
-                    ? `${bookingDetails.renter.first_name || ""} ${
-                          bookingDetails.renter.last_name || ""
-                      }`.trim()
-                    : "The renter";
+                await sendFCMNotificationFromWeb(
+                    bookingDetails.items.user_id,
+                    "Item Returned!",
+                    `${renterName} has returned "${bookingDetails.items.title}". Please confirm.`,
+                    {
+                        type: 'item_returned',
+                        rental_id: bookingDetails.rental_id,
+                        item_id: bookingDetails.item_id
+                    }
+                );
+                console.log('✅ FCM notification sent to owner');
+            } catch (notificationError) {
+                console.error('Failed to send FCM notification:', notificationError);
+            }
 
+            // 2️⃣ Send in-app notification to web owner
+            try {
                 await handleBookingStatusChange(
                     bookingDetails.status,
                     "awaiting_owner_confirmation",
@@ -913,6 +923,7 @@ function MarkReturned({ rental, onChanged }) {
                         owner: bookingDetails.owner,
                     }
                 );
+                console.log('✅ In-app notification sent to owner');
             } catch (notificationError) {
                 console.error(
                     "Failed to send return notification:",
@@ -975,9 +986,8 @@ function MarkCheckIn({ rental, onChanged }) {
             // Trigger notification to owner (rental started)
             try {
                 const renterName = bookingDetails.renter
-                    ? `${bookingDetails.renter.first_name || ""} ${
-                          bookingDetails.renter.last_name || ""
-                      }`.trim()
+                    ? `${bookingDetails.renter.first_name || ""} ${bookingDetails.renter.last_name || ""
+                        }`.trim()
                     : "The renter";
 
                 await handleBookingStatusChange(
@@ -999,6 +1009,22 @@ function MarkCheckIn({ rental, onChanged }) {
                     "Failed to send check-in notification:",
                     notificationError
                 );
+            }
+
+            try {
+                await sendFCMNotificationFromWeb(
+                    bookingDetails.items.user_id,
+                    "Guest Checked In!",
+                    `${renterName} has checked in to "${bookingDetails.items.title}".`,
+                    {
+                        type: 'checked_in',
+                        rental_id: bookingDetails.rental_id,
+                        item_id: bookingDetails.item_id
+                    }
+                );
+                console.log('✅ FCM notification sent to owner');
+            } catch (notificationError) {
+                console.error('Failed to send FCM notification:', notificationError);
             }
 
             // (Duplicate block removed) Notification already sent above
@@ -1059,9 +1085,8 @@ function MarkCheckout({ rental, onChanged }) {
             // Trigger notification to owner
             try {
                 const renterName = bookingDetails.renter
-                    ? `${bookingDetails.renter.first_name || ""} ${
-                          bookingDetails.renter.last_name || ""
-                      }`.trim()
+                    ? `${bookingDetails.renter.first_name || ""} ${bookingDetails.renter.last_name || ""
+                        }`.trim()
                     : "The renter";
 
                 await handleBookingStatusChange(
@@ -1083,6 +1108,22 @@ function MarkCheckout({ rental, onChanged }) {
                     "Failed to send checkout notification:",
                     notificationError
                 );
+            }
+
+            try {
+                await sendFCMNotificationFromWeb(
+                    bookingDetails.items.user_id,
+                    "Guest Checked Out!",
+                    `${renterName} has checked out from "${bookingDetails.items.title}". Please confirm.`,
+                    {
+                        type: 'checked_out',
+                        rental_id: bookingDetails.rental_id,
+                        item_id: bookingDetails.item_id
+                    }
+                );
+                console.log('✅ FCM notification sent to owner');
+            } catch (notificationError) {
+                console.error('Failed to send FCM notification:', notificationError);
             }
 
             onChanged && onChanged();
@@ -1189,11 +1230,10 @@ function RateLessorButton({ rental }) {
                                 type="button"
                                 key={n}
                                 onClick={() => setRating(n)}
-                                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold transition-all ${
-                                    n <= rating
-                                        ? "bg-[#FFAB00] border-[#FFAB00] text-[#1E1E1E] scale-110"
-                                        : "bg-white border-[#1E1E1E]/20 text-[#1E1E1E]/40 hover:border-[#FFAB00]/50"
-                                }`}
+                                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold transition-all ${n <= rating
+                                    ? "bg-[#FFAB00] border-[#FFAB00] text-[#1E1E1E] scale-110"
+                                    : "bg-white border-[#1E1E1E]/20 text-[#1E1E1E]/40 hover:border-[#FFAB00]/50"
+                                    }`}
                                 aria-label={`${n} star`}
                             >
                                 {n}
@@ -1225,8 +1265,8 @@ function RateLessorButton({ rental }) {
                             {loading
                                 ? "Saving..."
                                 : existing
-                                ? "Update"
-                                : "Submit"}
+                                    ? "Update"
+                                    : "Submit"}
                         </Button>
                     </DialogFooter>
                 </form>
@@ -1311,11 +1351,10 @@ function RateItemButton({ rental }) {
                                 type="button"
                                 key={n}
                                 onClick={() => setRating(n)}
-                                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold transition-all ${
-                                    n <= rating
-                                        ? "bg-[#FFAB00] border-[#FFAB00] text-[#1E1E1E] scale-110"
-                                        : "bg-white border-[#1E1E1E]/20 text-[#1E1E1E]/40 hover:border-[#FFAB00]/50"
-                                }`}
+                                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold transition-all ${n <= rating
+                                    ? "bg-[#FFAB00] border-[#FFAB00] text-[#1E1E1E] scale-110"
+                                    : "bg-white border-[#1E1E1E]/20 text-[#1E1E1E]/40 hover:border-[#FFAB00]/50"
+                                    }`}
                                 aria-label={`${n} star`}
                             >
                                 {n}
@@ -1347,8 +1386,8 @@ function RateItemButton({ rental }) {
                             {loading
                                 ? "Saving..."
                                 : existing
-                                ? "Update"
-                                : "Submit"}
+                                    ? "Update"
+                                    : "Submit"}
                         </Button>
                     </DialogFooter>
                 </form>
@@ -1509,16 +1548,16 @@ function DetailsModal({ rental, user, categories }) {
                             compact
                             labelsOverride={
                                 rental.items?.category_id &&
-                                isAccommodationAny(
-                                    rental.items.category_id,
-                                    categories || []
-                                )
+                                    isAccommodationAny(
+                                        rental.items.category_id,
+                                        categories || []
+                                    )
                                     ? {
-                                          on_the_way: "Check-in",
-                                          ongoing: "Checked-in",
-                                          awaiting_owner_confirmation:
-                                              "Checkout",
-                                      }
+                                        on_the_way: "Check-in",
+                                        ongoing: "Checked-in",
+                                        awaiting_owner_confirmation:
+                                            "Checkout",
+                                    }
                                     : null
                             }
                         />
@@ -1577,10 +1616,10 @@ function UploadDeposit({ rental, onChanged }) {
                 .from("rental_transactions")
                 .select(
                     `
-                    *,
-                    items!inner(title, user_id),
-                    renter:renter_id(first_name, last_name)
-                `
+          *,
+          items!inner(title, user_id),
+          renter:renter_id(first_name, last_name)
+        `
                 )
                 .eq("rental_id", rental.rental_id)
                 .single();
@@ -1610,14 +1649,30 @@ function UploadDeposit({ rental, onChanged }) {
 
             toast.success("Deposit uploaded. Waiting for owner verification.");
 
-            // Trigger notification to owner
-            try {
-                const renterName = bookingDetails.renter
-                    ? `${bookingDetails.renter.first_name || ""} ${
-                          bookingDetails.renter.last_name || ""
-                      }`.trim()
-                    : "The renter";
+            // ✅ SEND BOTH NOTIFICATIONS
+            const renterName = bookingDetails.renter
+                ? `${bookingDetails.renter.first_name || ""} ${bookingDetails.renter.last_name || ""}`.trim()
+                : "The renter";
 
+            // 1️⃣ Send FCM notification to mobile owner
+            try {
+                await sendFCMNotificationFromWeb(
+                    bookingDetails.items.user_id, // owner's user_id
+                    "Deposit Submitted!",
+                    `${renterName} has submitted a deposit for "${bookingDetails.items.title}". Please verify.`,
+                    {
+                        type: 'deposit_submitted',
+                        rental_id: bookingDetails.rental_id,
+                        item_id: bookingDetails.item_id
+                    }
+                );
+                console.log('✅ FCM notification sent to owner');
+            } catch (notificationError) {
+                console.error('Failed to send FCM notification:', notificationError);
+            }
+
+            // 2️⃣ Send in-app notification to web owner
+            try {
                 await handleBookingStatusChange(
                     "confirmed",
                     "deposit_submitted",
@@ -1628,6 +1683,7 @@ function UploadDeposit({ rental, onChanged }) {
                         owner: bookingDetails.owner,
                     }
                 );
+                console.log('✅ In-app notification sent to owner');
             } catch (notificationError) {
                 console.error(
                     "Failed to send deposit upload notification:",
@@ -1741,10 +1797,10 @@ function MarkReceived({ rental, onChanged }) {
                 .from("rental_transactions")
                 .select(
                     `
-                    *,
-                    items!inner(title, user_id),
-                    renter:renter_id(first_name, last_name)
-                `
+          *,
+          items!inner(title, user_id),
+          renter:renter_id(first_name, last_name)
+        `
                 )
                 .eq("rental_id", rental.rental_id)
                 .single();
@@ -1760,14 +1816,30 @@ function MarkReceived({ rental, onChanged }) {
             if (error) throw error;
             toast.success("Marked as received. Enjoy your rental!");
 
-            // Notify owner that rental started
-            try {
-                const renterName = bookingDetails.renter
-                    ? `${bookingDetails.renter.first_name || ""} ${
-                          bookingDetails.renter.last_name || ""
-                      }`.trim()
-                    : "The renter";
+            // ✅ SEND BOTH NOTIFICATIONS
+            const renterName = bookingDetails.renter
+                ? `${bookingDetails.renter.first_name || ""} ${bookingDetails.renter.last_name || ""}`.trim()
+                : "The renter";
 
+            // 1️⃣ Send FCM notification to mobile owner
+            try {
+                await sendFCMNotificationFromWeb(
+                    bookingDetails.items.user_id,
+                    "Rental Started!",
+                    `${renterName} has received "${bookingDetails.items.title}" and the rental has started.`,
+                    {
+                        type: 'rental_started',
+                        rental_id: bookingDetails.rental_id,
+                        item_id: bookingDetails.item_id
+                    }
+                );
+                console.log('✅ FCM notification sent to owner');
+            } catch (notificationError) {
+                console.error('Failed to send FCM notification:', notificationError);
+            }
+
+            // 2️⃣ Send in-app notification to web owner
+            try {
                 await handleBookingStatusChange(
                     "on_the_way",
                     "ongoing",
@@ -1782,6 +1854,7 @@ function MarkReceived({ rental, onChanged }) {
                         owner: bookingDetails.owner,
                     }
                 );
+                console.log('✅ In-app notification sent to owner');
             } catch (notificationError) {
                 console.error(
                     "Failed to send rental started notification:",
@@ -1796,6 +1869,7 @@ function MarkReceived({ rental, onChanged }) {
             setLoading(false);
         }
     };
+
     return (
         <Button
             size="sm"
