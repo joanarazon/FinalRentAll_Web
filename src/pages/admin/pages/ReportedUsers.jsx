@@ -4,7 +4,7 @@ import { supabase } from "../../../../supabaseClient";
 import { useUser } from "../../../hooks/useUser";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Eye, Gavel, ThumbsDown } from "lucide-react";
+import { Loader2, Eye, Gavel, ThumbsDown, Bell } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -33,6 +33,7 @@ export default function ReportedUsers() {
     });
     const [resolutionNote, setResolutionNote] = useState("");
     const [noteSubmitting, setNoteSubmitting] = useState(false);
+    const [sendingNoticeId, setSendingNoticeId] = useState(null);
 
     // Fetch reports from Supabase
     const fetchData = useCallback(async () => {
@@ -115,6 +116,13 @@ export default function ReportedUsers() {
                 toast.success(
                     `Added +${noteDialog.increment} warning(s) and marked resolved.`
                 );
+                // notify users about resolution
+                notifyResolution(
+                    noteDialog.complaintId,
+                    noteDialog.targetUserId,
+                    "warn",
+                    resolutionNote.trim()
+                );
             } else if (noteDialog.action === "resolve") {
                 const { error } = await supabase
                     .from("user_complaints")
@@ -127,6 +135,12 @@ export default function ReportedUsers() {
                     .eq("complaint_id", noteDialog.complaintId);
                 if (error) throw error;
                 toast.success("Report marked as resolved.");
+                notifyResolution(
+                    noteDialog.complaintId,
+                    noteDialog.targetUserId,
+                    "resolve",
+                    resolutionNote.trim()
+                );
             } else if (noteDialog.action === "reject") {
                 const { error } = await supabase
                     .from("user_complaints")
@@ -139,6 +153,12 @@ export default function ReportedUsers() {
                     .eq("complaint_id", noteDialog.complaintId);
                 if (error) throw error;
                 toast.success("Report rejected (not enough evidence).");
+                notifyResolution(
+                    noteDialog.complaintId,
+                    noteDialog.targetUserId,
+                    "reject",
+                    resolutionNote.trim()
+                );
             }
             setNoteDialog({
                 open: false,
@@ -191,6 +211,98 @@ export default function ReportedUsers() {
             toast.error("Failed to reject report.");
         } finally {
             setResolvingId(null);
+        }
+    };
+
+    // Send an informational notice to the reported user (does not change complaint status)
+    const sendNotice = async (complaintId, targetUserId, reason, rentalId = null) => {
+        try {
+            setSendingNoticeId(complaintId);
+            const title = "Notice: You have been reported";
+            const message = `You have been reported for ${reason}. Our admin team will verify and evaluate the issue before deciding on any action. You will be notified once the review is complete.`;
+
+            const { error } = await supabase.from("notifications").insert({
+                user_id: targetUserId,
+                title,
+                message,
+                type: "report_notice",
+                rental_id: rentalId || null,
+                item_id: null,
+            });
+            if (error) throw error;
+            toast.success("Notice sent to the reported user.");
+            // optional: refresh table to reflect any UI changes elsewhere
+            fetchData();
+        } catch (e) {
+            console.error("Failed to send notice:", e);
+            toast.error("Failed to send notice.");
+        } finally {
+            setSendingNoticeId(null);
+        }
+    };
+
+    // Notify both target user (reported) and the sender (reporter) when an admin resolves/rejects/warns
+    const notifyResolution = async (
+        complaintId,
+        targetUserId,
+        actionType,
+        adminNote
+    ) => {
+        try {
+            // find the complaint in local rows cache to get sender id and reason
+            const complaint = rows.find((r) => r.complaint_id === complaintId);
+            const senderId = complaint?.sender_id || null;
+            const reason = complaint?.reason || "a report";
+
+            // message for the reported user
+            const targetTitle = "Report review completed";
+            const targetMessage = `Your account was reviewed for ${reason}. Admin action: ${
+                actionType === "reject"
+                    ? "No action taken"
+                    : actionType === "warn"
+                    ? "Warnings added"
+                    : "Marked resolved"
+            }. ${adminNote || ""}`;
+
+            // message for the reporter
+            const senderTitle = "Report review result";
+            const senderMessage = `Thank you for your report about ${reason}. The admin review is complete: ${
+                actionType === "reject"
+                    ? "Report rejected (not enough evidence)."
+                    : actionType === "warn"
+                    ? "Reporter: action taken and warnings added to the reported user."
+                    : "Report marked as resolved."
+            } ${adminNote || ""}`;
+
+            const inserts = [];
+            if (targetUserId) {
+                inserts.push({
+                    user_id: targetUserId,
+                    title: targetTitle,
+                    message: targetMessage,
+                    type: "report_resolution",
+                    rental_id: complaint?.rental_id || null,
+                    item_id: null,
+                });
+            }
+            if (senderId) {
+                inserts.push({
+                    user_id: senderId,
+                    title: senderTitle,
+                    message: senderMessage,
+                    type: "report_resolution",
+                    rental_id: complaint?.rental_id || null,
+                    item_id: null,
+                });
+            }
+
+            if (inserts.length > 0) {
+                const { error } = await supabase.from("notifications").insert(inserts);
+                if (error) throw error;
+            }
+        } catch (e) {
+            console.error("Failed to create resolution notifications:", e);
+            // don't surface error to admin flow — non-blocking
         }
     };
 
@@ -309,6 +421,29 @@ export default function ReportedUsers() {
 
                                                 {r.status === "pending" && (
                                                     <>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="border-blue-400 text-blue-700 hover:bg-blue-50 cursor-pointer"
+                                                            disabled={sendingNoticeId === r.complaint_id}
+                                                            onClick={() =>
+                                                                sendNotice(
+                                                                    r.complaint_id,
+                                                                    r.target_user_id,
+                                                                    r.reason,
+                                                                    r.rental_id
+                                                                )
+                                                            }
+                                                            title="Send an informational notice to the reported user."
+                                                        >
+                                                            {sendingNoticeId === r.complaint_id ? (
+                                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                            ) : (
+                                                                <>
+                                                                    <Bell className="w-4 h-4 mr-1" /> Notify
+                                                                </>
+                                                            )}
+                                                        </Button>
                                                         <Button
                                                             size="sm"
                                                             className="bg-yellow-500 text-white hover:bg-yellow-600 cursor-pointer"

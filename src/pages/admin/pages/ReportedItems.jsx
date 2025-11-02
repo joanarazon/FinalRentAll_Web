@@ -19,10 +19,12 @@ import {
     CheckCircle,
     ShieldBan,
     XCircle,
+    Bell,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useToastApi } from "@/components/ui/toast";
 import { handleItemBanned } from "@/lib/notificationEvents";
+import { createNotification } from "@/lib/notifications";
 
 export default function ReportedItems() {
     const admin = useUser();
@@ -42,6 +44,7 @@ export default function ReportedItems() {
     });
     const [resolutionNote, setResolutionNote] = useState("");
     const [noteSubmitting, setNoteSubmitting] = useState(false);
+    const [sendingNoticeId, setSendingNoticeId] = useState(null);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -120,6 +123,106 @@ export default function ReportedItems() {
             warningAmount,
         });
         setResolutionNote("");
+    };
+
+    // Send an informational notice to the item owner (and optionally the reporter)
+    const sendNotice = async (complaintId, itemId, ownerId, reason, rentalId = null) => {
+        try {
+            setSendingNoticeId(complaintId);
+
+            // find complaint row to get item title and sender
+            const complaint = rows.find((r) => r.complaint_id === complaintId) || {};
+            const itemTitle = complaint.item?.title || "your item";
+            const reporterId = complaint?.sender_id || null;
+
+            const title = "Notice: Your item has been reported";
+            const message = `Your item "${itemTitle}" has been reported for ${reason}. Our admin team will verify and evaluate the issue before deciding on any action. You will be notified once the review is complete.`;
+
+            // Notify owner
+            if (ownerId) {
+                await createNotification({
+                    userId: ownerId,
+                    title,
+                    message,
+                    type: "item",
+                    rentalId: rentalId || null,
+                    itemId: itemId || null,
+                });
+            }
+
+            // Optionally notify the reporter that their report was received and owner was notified
+            if (reporterId) {
+                const repTitle = "Report Received";
+                const repMessage = `Thanks for reporting \"${itemTitle}\". The owner has been notified and our admin team will review the issue. You will be notified once the review is complete.`;
+                await createNotification({
+                    userId: reporterId,
+                    title: repTitle,
+                    message: repMessage,
+                    type: "item",
+                    rentalId: rentalId || null,
+                    itemId: itemId || null,
+                });
+            }
+
+            toast.success("Owner notified about the report.");
+        } catch (err) {
+            console.error("Failed to send item notice:", err);
+            toast.error("Failed to notify owner.");
+        } finally {
+            setSendingNoticeId(null);
+        }
+    };
+
+    // Notify both owner and reporter when admin resolves/rejects/warns or bans
+    const notifyResolution = async (complaintId, ownerId, actionType, adminNote) => {
+        try {
+            const complaint = rows.find((r) => r.complaint_id === complaintId) || {};
+            const senderId = complaint?.sender_id || null;
+            const itemTitle = complaint.item?.title || "your item";
+
+            // For bans, owner already receives a ban notification via handleItemBanned, so skip owner to avoid duplicate
+            if (actionType !== "ban" && ownerId) {
+                const targetTitle = "Report review completed";
+                const targetMessage = `Your item \"${itemTitle}\" was reviewed by our admin team. Action: ${
+                    actionType === "reject"
+                        ? "No action taken"
+                        : actionType === "ban"
+                        ? "Item banned"
+                        : actionType === "resolve"
+                        ? "Marked resolved"
+                        : actionType
+                }. ${adminNote || ""}`;
+                await createNotification({
+                    userId: ownerId,
+                    title: targetTitle,
+                    message: targetMessage,
+                    type: "item",
+                    itemId: complaint.item?.item_id || null,
+                    rentalId: complaint.rental_id || null,
+                });
+            }
+
+            if (senderId) {
+                const senderTitle = "Report review result";
+                const senderMessage = `Thank you for your report about \"${itemTitle}\". The admin review is complete: ${
+                    actionType === "reject"
+                        ? "Report rejected (not enough evidence)."
+                        : actionType === "ban"
+                        ? "Item banned and action taken against the owner."
+                        : "Report marked as resolved."
+                } ${adminNote || ""}`;
+                await createNotification({
+                    userId: senderId,
+                    title: senderTitle,
+                    message: senderMessage,
+                    type: "item",
+                    itemId: complaint.item?.item_id || null,
+                    rentalId: complaint.rental_id || null,
+                });
+            }
+        } catch (e) {
+            console.error("Failed to create resolution notifications:", e);
+        }
     };
 
     const submitNoteAction = async () => {
@@ -248,10 +351,42 @@ export default function ReportedItems() {
                         noteDialog.warningAmount > 1 ? "s" : ""
                     } issued to owner.`
                 );
+                // notify reporter about the outcome, owner already notified via handleItemBanned
+                try {
+                    await notifyResolution(
+                        noteDialog.complaintId,
+                        noteDialog.ownerId,
+                        "ban",
+                        resolutionNote.trim()
+                    );
+                } catch (err) {
+                    console.warn("notifyResolution (ban) failed", err);
+                }
             } else if (noteDialog.action === "resolve") {
                 toast.success("Report marked as resolved.");
+                // notify both owner and reporter
+                try {
+                    await notifyResolution(
+                        noteDialog.complaintId,
+                        noteDialog.ownerId,
+                        "resolve",
+                        resolutionNote.trim()
+                    );
+                } catch (err) {
+                    console.warn("notifyResolution (resolve) failed", err);
+                }
             } else {
                 toast.success("Report rejected due to insufficient evidence.");
+                try {
+                    await notifyResolution(
+                        noteDialog.complaintId,
+                        noteDialog.ownerId,
+                        "reject",
+                        resolutionNote.trim()
+                    );
+                } catch (err) {
+                    console.warn("notifyResolution (reject) failed", err);
+                }
             }
 
             await fetchData();
@@ -368,6 +503,30 @@ export default function ReportedItems() {
 
                                 <div className="flex flex-wrap gap-2">
                                     <ReportDetailsDialog row={r} />
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="border-blue-400 text-blue-700 hover:bg-blue-50 cursor-pointer"
+                                        disabled={sendingNoticeId === r.complaint_id}
+                                        onClick={() =>
+                                            sendNotice(
+                                                r.complaint_id,
+                                                r.target_item_id,
+                                                r.item?.user_id,
+                                                r.reason,
+                                                r.rental_id
+                                            )
+                                        }
+                                        title="Notify the item owner that their item was reported"
+                                    >
+                                        {sendingNoticeId === r.complaint_id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <Bell className="w-4 h-4 mr-1" /> Notify
+                                            </>
+                                        )}
+                                    </Button>
                                     {r.status === "pending" && (
                                         <>
                                             <Button
