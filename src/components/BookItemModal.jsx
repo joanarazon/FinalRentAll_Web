@@ -16,6 +16,7 @@ import { supabase } from "../../supabaseClient";
 import { getLessorRatingStats } from "@/lib/reviews";
 import ReportDialog from "@/components/ReportDialog";
 import { handleBookingCreated } from "../lib/notificationEvents";
+import { sendFCMNotificationFromWeb } from "../hooks/notification";
 
 export default function BookItemModal({
     open,
@@ -347,9 +348,7 @@ export default function BookItemModal({
             return;
         }
         if (remaining !== null && remaining <= 0) {
-            setErrorMsg(
-                "Selected dates are fully booked. Try different dates."
-            );
+            setErrorMsg("Selected dates are fully booked. Try different dates.");
             return;
         }
         const startMidnight = new Date(range.from);
@@ -384,10 +383,10 @@ export default function BookItemModal({
                 .insert(row)
                 .select(
                     `
-                    *,
-                    items!inner(title, user_id),
-                    renter:renter_id(first_name, last_name)
-                `
+        *,
+        items!inner(title, user_id),
+        renter:renter_id(first_name, last_name)
+      `
                 )
                 .single();
             if (error) {
@@ -397,14 +396,32 @@ export default function BookItemModal({
                 throw error;
             }
 
-            // Trigger notification to owner
-            try {
-                const renterName = insertedBooking.renter
-                    ? `${insertedBooking.renter.first_name || ""} ${
-                          insertedBooking.renter.last_name || ""
-                      }`.trim()
-                    : "Unknown User";
+            // ✅ SEND BOTH NOTIFICATIONS: FCM (web-to-mobile) AND handleBookingCreated (web-to-web)
 
+            const renterName = insertedBooking.renter
+                ? `${insertedBooking.renter.first_name || ""} ${insertedBooking.renter.last_name || ""
+                    }`.trim()
+                : "Unknown User";
+
+            // 1️⃣ Send FCM notification to mobile owner
+            try {
+                await sendFCMNotificationFromWeb(
+                    insertedBooking.items.user_id, // owner's user_id
+                    "New Booking Request!",
+                    `${renterName} has requested to book "${insertedBooking.items.title}"`,
+                    {
+                        type: 'new_booking_request',
+                        rental_id: insertedBooking.rental_id,
+                        item_id: insertedBooking.item_id
+                    }
+                );
+                console.log('✅ FCM notification sent to owner');
+            } catch (notificationError) {
+                console.error('Failed to send FCM notification:', notificationError);
+            }
+
+            // 2️⃣ Send in-app notification to web owner (handleBookingCreated)
+            try {
                 await handleBookingCreated(
                     {
                         ...insertedBooking,
@@ -413,12 +430,12 @@ export default function BookItemModal({
                     insertedBooking.items.title,
                     renterName
                 );
+                console.log('✅ In-app notification sent to owner');
             } catch (notificationError) {
                 console.error(
                     "Failed to send booking notification:",
                     notificationError
                 );
-                // Don't fail the booking if notification fails
             }
 
             onBooked?.();
@@ -510,11 +527,9 @@ export default function BookItemModal({
                                 <StarRow value={averageRating} />
                                 <span className="text-sm text-gray-700">
                                     {reviews && reviews.length > 0
-                                        ? `${averageRating.toFixed(1)} / 5 · ${
-                                              reviews.length
-                                          } review${
-                                              reviews.length > 1 ? "s" : ""
-                                          }`
+                                        ? `${averageRating.toFixed(1)} / 5 · ${reviews.length
+                                        } review${reviews.length > 1 ? "s" : ""
+                                        }`
                                         : "No reviews yet"}
                                 </span>
                             </div>
@@ -549,8 +564,8 @@ export default function BookItemModal({
                                             <span className="text-xs text-gray-500">
                                                 {r.created_at
                                                     ? new Date(
-                                                          r.created_at
-                                                      ).toLocaleDateString()
+                                                        r.created_at
+                                                    ).toLocaleDateString()
                                                     : ""}
                                             </span>
                                         </div>
@@ -648,8 +663,8 @@ export default function BookItemModal({
                                         {availabilityLoading
                                             ? "Checking..."
                                             : range.from && range.to
-                                            ? remaining ?? "—"
-                                            : "—"}
+                                                ? remaining ?? "—"
+                                                : "—"}
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
@@ -746,14 +761,12 @@ export default function BookItemModal({
                                                 <span className="text-xs text-gray-600">
                                                     {ownerRatingLoading
                                                         ? "Loading..."
-                                                        : `(${
-                                                              ownerRating.count
-                                                          } ${
-                                                              ownerRating.count ===
-                                                              1
-                                                                  ? "review"
-                                                                  : "reviews"
-                                                          })`}
+                                                        : `(${ownerRating.count
+                                                        } ${ownerRating.count ===
+                                                            1
+                                                            ? "review"
+                                                            : "reviews"
+                                                        })`}
                                                 </span>
                                             </span>
                                         </div>
@@ -762,25 +775,25 @@ export default function BookItemModal({
                                             <span>
                                                 {owner.created_at
                                                     ? new Date(
-                                                          owner.created_at
-                                                      ).toLocaleDateString()
+                                                        owner.created_at
+                                                    ).toLocaleDateString()
                                                     : "—"}
                                             </span>
                                         </div>
                                         {(owner.location_lat ||
                                             owner.location_lng) && (
-                                            <div className="flex justify-between">
-                                                <span>Location</span>
-                                                <span>
-                                                    {owner.location_lat || ""}
-                                                    {owner.location_lat &&
-                                                    owner.location_lng
-                                                        ? ", "
-                                                        : ""}
-                                                    {owner.location_lng || ""}
-                                                </span>
-                                            </div>
-                                        )}
+                                                <div className="flex justify-between">
+                                                    <span>Location</span>
+                                                    <span>
+                                                        {owner.location_lat || ""}
+                                                        {owner.location_lat &&
+                                                            owner.location_lng
+                                                            ? ", "
+                                                            : ""}
+                                                        {owner.location_lng || ""}
+                                                    </span>
+                                                </div>
+                                            )}
                                         {owner.phone && (
                                             <div className="flex justify-between">
                                                 <span>Phone</span>
@@ -868,12 +881,12 @@ export default function BookItemModal({
                                 ? isOwner
                                     ? "Owners cannot book their own item"
                                     : daysCount <= 0
-                                    ? "Select a start and end date"
-                                    : !currentUserId
-                                    ? "Sign in to continue"
-                                    : remaining !== null && remaining <= 0
-                                    ? "Fully booked for selected dates"
-                                    : ""
+                                        ? "Select a start and end date"
+                                        : !currentUserId
+                                            ? "Sign in to continue"
+                                            : remaining !== null && remaining <= 0
+                                                ? "Fully booked for selected dates"
+                                                : ""
                                 : undefined
                         }
                     >

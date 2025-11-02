@@ -35,10 +35,27 @@ export default function PendingItems() {
             setLoading(true);
             let query = supabase
                 .from("items")
-                .select(
-                    "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,created_at,main_image_url,item_status,quantity"
-                )
-                .order("created_at", { ascending: false });
+                .select(`
+    item_id,
+    user_id,
+    category_id,
+    title,
+    description,
+    price_per_day,
+    deposit_fee,
+    location,
+    created_at,
+    main_image_url,
+    item_status,
+    quantity,
+    users (
+      id,
+      first_name,
+      last_name
+    )
+  `)
+                .order("created_at", { ascending: false })
+                .eq("item_status", "pending");
 
             // Filter server-side by status if column exists
             query = query.eq("item_status", "pending");
@@ -290,13 +307,13 @@ export default function PendingItems() {
                                         >
                                             {filterDate
                                                 ? filterDate.toLocaleDateString(
-                                                      "en-US",
-                                                      {
-                                                          month: "short",
-                                                          day: "numeric",
-                                                          year: "numeric",
-                                                      }
-                                                  )
+                                                    "en-US",
+                                                    {
+                                                        month: "short",
+                                                        day: "numeric",
+                                                        year: "numeric",
+                                                    }
+                                                )
                                                 : "Select date..."}
                                         </span>
                                     </Button>
@@ -397,9 +414,8 @@ export default function PendingItems() {
                             <p className="text-sm font-medium text-gray-700">
                                 {loading
                                     ? "Loading pending items..."
-                                    : `${filtered.length} pending item${
-                                          filtered.length !== 1 ? "s" : ""
-                                      }`}
+                                    : `${filtered.length} pending item${filtered.length !== 1 ? "s" : ""
+                                    }`}
                             </p>
                         </div>
                         <Button
@@ -428,7 +444,7 @@ export default function PendingItems() {
                                         />
                                     </th>
                                     <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Item ID
+                                        Lessor Name
                                     </th>
                                     <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                         Request Date
@@ -498,8 +514,10 @@ export default function PendingItems() {
                                                         className="rounded"
                                                     />
                                                 </td>
-                                                <td className="p-4 text-[#FFAB00] font-semibold font-mono text-xs break-all min-w-[140px]">
-                                                    {it.item_id}
+                                                <td className="p-4 text-sm text-gray-800">
+                                                    {it.users
+                                                        ? `${it.users.first_name} ${it.users.last_name}`
+                                                        : "—"}
                                                 </td>
                                                 <td className="p-4 text-sm text-gray-700">
                                                     {new Date(
@@ -561,7 +579,7 @@ export default function PendingItems() {
                                                             }
                                                         >
                                                             {actionId ===
-                                                            it.item_id ? (
+                                                                it.item_id ? (
                                                                 <Loader2 className="w-4 h-4 animate-spin" />
                                                             ) : (
                                                                 "Approve"
@@ -582,7 +600,7 @@ export default function PendingItems() {
                                                             }
                                                         >
                                                             {actionId ===
-                                                            it.item_id ? (
+                                                                it.item_id ? (
                                                                 <Loader2 className="w-4 h-4 animate-spin" />
                                                             ) : (
                                                                 "Reject"

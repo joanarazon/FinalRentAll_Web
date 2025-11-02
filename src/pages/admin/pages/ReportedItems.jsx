@@ -3,8 +3,7 @@ import AdminLayout from "../../../components/AdminLayout";
 import { supabase } from "../../../../supabaseClient";
 import { useUser } from "../../../hooks/useUser";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Loader2, Eye } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
     Dialog,
     DialogContent,
@@ -13,6 +12,15 @@ import {
     DialogTrigger,
     DialogFooter,
 } from "@/components/ui/dialog";
+import {
+    Loader2,
+    Eye,
+    Gavel,
+    CheckCircle,
+    ShieldBan,
+    XCircle,
+} from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import { useToastApi } from "@/components/ui/toast";
 
 export default function ReportedItems() {
@@ -23,21 +31,39 @@ export default function ReportedItems() {
     const [statusFilter, setStatusFilter] = useState("pending");
     const [resolvingId, setResolvingId] = useState(null);
 
+    const [noteDialog, setNoteDialog] = useState({
+        open: false,
+        action: null,
+        complaintId: null,
+        itemId: null,
+        ownerId: null,
+        warningAmount: null,
+    });
+    const [resolutionNote, setResolutionNote] = useState("");
+    const [noteSubmitting, setNoteSubmitting] = useState(false);
+
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
             let query = supabase
                 .from("complaints")
                 .select(
-                    `complaint_id, sender_id, target_item_id, rental_id, reason, content, sent_at, status,
-                     sender:users!complaints_sender_id_fkey(id, first_name, last_name),
-                     item:items!complaints_target_item_id_fkey(item_id, title, user_id)`
+                    `
+          complaint_id, sender_id, target_item_id, rental_id, reason, content, sent_at, status, resolution_note, resolved_by, resolved_at,
+          sender:users!complaints_sender_id_fkey(id, first_name, last_name),
+          item:items!complaints_target_item_id_fkey(
+              item_id, title, user_id, main_image_url,
+              owner:users!items_user_id_fkey(id, first_name, last_name)
+          )
+        `
                 )
                 .not("target_item_id", "is", null)
                 .order("sent_at", { ascending: false });
+
             if (statusFilter && statusFilter !== "all") {
                 query = query.eq("status", statusFilter);
             }
+
             const { data, error } = await query;
             if (error) throw error;
             setRows(data || []);
@@ -53,39 +79,113 @@ export default function ReportedItems() {
         fetchData();
     }, [fetchData]);
 
-    const markResolved = async (complaintId) => {
-        if (!admin?.id) return;
-        setResolvingId(complaintId);
+    const handleActionWithNote = (
+        action,
+        complaintId,
+        itemId = null,
+        ownerId = null,
+        warningAmount = null
+    ) => {
+        setNoteDialog({
+            open: true,
+            action,
+            complaintId,
+            itemId,
+            ownerId,
+            warningAmount,
+        });
+        setResolutionNote("");
+    };
+
+    const submitNoteAction = async () => {
+        if (!admin?.id || !noteDialog.complaintId) return;
+        setNoteSubmitting(true);
         try {
+            // 1️⃣ If banning, ban the item
+            if (noteDialog.action === "ban") {
+                const { error: banErr } = await supabase
+                    .from("items")
+                    .update({ item_status: "banned" })
+                    .eq("item_id", noteDialog.itemId);
+                if (banErr) throw banErr;
+
+                // Add warnings via RPC
+                const { error: warnErr } = await supabase.rpc(
+                    "increment_user_warnings",
+                    {
+                        user_id: noteDialog.ownerId,
+                        increment_by: noteDialog.warningAmount,
+                    }
+                );
+                if (warnErr) throw warnErr;
+            }
+
+            // 2️⃣ Update the complaint with resolution info
             const { error } = await supabase
                 .from("complaints")
                 .update({
-                    status: "resolved",
+                    status:
+                        noteDialog.action === "ban"
+                            ? "banned"
+                            : noteDialog.action === "resolve"
+                            ? "resolved"
+                            : "rejected",
                     resolved_by: admin.id,
                     resolved_at: new Date().toISOString(),
+                    resolution_note: resolutionNote.trim(),
                 })
-                .eq("complaint_id", complaintId)
-                .neq("status", "resolved");
+                .eq("complaint_id", noteDialog.complaintId);
             if (error) throw error;
-            toast.success("Report marked as resolved.");
-            fetchData();
+
+            // 3️⃣ Toast notifications
+            if (noteDialog.action === "ban") {
+                toast.success(
+                    `Item banned and +${noteDialog.warningAmount} warning${
+                        noteDialog.warningAmount > 1 ? "s" : ""
+                    } issued to owner.`
+                );
+            } else if (noteDialog.action === "resolve") {
+                toast.success("Report marked as resolved.");
+            } else {
+                toast.success("Report rejected due to insufficient evidence.");
+            }
+
+            await fetchData();
         } catch (e) {
-            console.error("Resolve failed:", e.message);
-            toast.error("Failed to resolve report.");
+            console.error("Action failed:", e.message);
+            toast.error("Failed to complete action.");
         } finally {
+            setNoteSubmitting(false);
+            setNoteDialog({
+                open: false,
+                action: null,
+                complaintId: null,
+                itemId: null,
+                ownerId: null,
+                warningAmount: null,
+            });
             setResolvingId(null);
         }
     };
 
+    const markResolved = (complaintId) =>
+        handleActionWithNote("resolve", complaintId);
+    const rejectReport = (complaintId) =>
+        handleActionWithNote("reject", complaintId);
+
     return (
         <AdminLayout>
-            <div className="p-4">
-                <h1 className="text-2xl font-bold mb-1">Reported Items</h1>
-                <p className="text-gray-600 mb-4">
-                    Review and resolve reports submitted against items
-                </p>
-                <div className="flex items-center gap-3 mb-3">
-                    <label className="text-sm">Status</label>
+            <div className="p-6 space-y-6">
+                <div>
+                    <h1 className="text-2xl font-bold mb-1">Reported Items</h1>
+                    <p className="text-gray-600 mb-4">
+                        Review and take action on reports submitted by users.
+                    </p>
+                </div>
+
+                {/* Filter */}
+                <div className="flex items-center gap-3 mb-6">
+                    <label className="text-sm font-medium">Filter</label>
                     <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
@@ -93,13 +193,14 @@ export default function ReportedItems() {
                     >
                         <option value="pending">Pending</option>
                         <option value="resolved">Resolved</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="banned">Banned</option>
                         <option value="all">All</option>
                     </select>
                     <Button
                         variant="outline"
                         onClick={fetchData}
                         disabled={loading}
-                        className="cursor-pointer"
                     >
                         {loading && (
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -108,94 +209,232 @@ export default function ReportedItems() {
                     </Button>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm border p-4">
-                    {loading ? (
-                        <div className="text-sm text-gray-600">Loading…</div>
-                    ) : rows.length === 0 ? (
-                        <div className="text-sm text-gray-600">
-                            No reports found.
-                        </div>
-                    ) : (
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b bg-gray-50">
-                                    <th className="p-2">Item ID</th>
-                                    <th className="p-2">Item Name</th>
-                                    <th className="p-2">Reported By</th>
-                                    <th className="p-2">Reason</th>
-                                    <th className="p-2">Sent</th>
-                                    <th className="p-2">Status</th>
-                                    <th className="p-2">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((r) => (
-                                    <tr
-                                        key={r.complaint_id}
-                                        className="border-b"
+                {/* Report list */}
+                {loading ? (
+                    <div className="text-sm text-gray-600">
+                        Loading reports…
+                    </div>
+                ) : rows.length === 0 ? (
+                    <div className="text-sm text-gray-600">
+                        No reports found.
+                    </div>
+                ) : (
+                    <div className="grid gap-4">
+                        {rows.map((r) => (
+                            <div
+                                key={r.complaint_id}
+                                className={`border rounded-xl p-4 shadow-sm transition ${
+                                    r.status === "resolved"
+                                        ? "bg-gray-50"
+                                        : r.status === "rejected"
+                                        ? "bg-red-50/50"
+                                        : r.status === "banned"
+                                        ? "bg-amber-50/50"
+                                        : "hover:bg-gray-50/70 bg-white"
+                                }`}
+                            >
+                                <div className="flex justify-between items-center mb-2">
+                                    <div className="font-semibold">
+                                        {r.item?.title || "Untitled Item"}
+                                    </div>
+                                    <Badge
+                                        variant={
+                                            r.status === "resolved"
+                                                ? "secondary"
+                                                : r.status === "rejected"
+                                                ? "destructive"
+                                                : r.status === "banned"
+                                                ? "outline"
+                                                : "default"
+                                        }
                                     >
-                                        <td className="p-2 text-sm font-mono">
-                                            {r.target_item_id || "—"}
-                                        </td>
-                                        <td className="p-2 text-sm">
-                                            {r.item?.title || "—"}
-                                        </td>
-                                        <td className="p-2 text-sm">
-                                            {r.sender ? (
-                                                <span>
-                                                    {r.sender.first_name}{" "}
-                                                    {r.sender.last_name}
-                                                </span>
-                                            ) : (
-                                                r.sender_id
-                                            )}
-                                        </td>
-                                        <td className="p-2 text-sm capitalize">
-                                            {r.reason}
-                                        </td>
-                                        <td className="p-2 text-sm">
-                                            {r.sent_at
-                                                ? new Date(
-                                                      r.sent_at
-                                                  ).toLocaleString()
-                                                : "—"}
-                                        </td>
-                                        <td className="p-2 text-sm capitalize">
-                                            {r.status}
-                                        </td>
-                                        <td className="p-2">
-                                            <div className="flex items-center gap-2">
-                                                <ReportDetailsDialog row={r} />
-                                                {r.status !== "resolved" && (
-                                                    <Button
-                                                        size="sm"
-                                                        className="bg-green-600 text-white hover:bg-green-700 cursor-pointer"
-                                                        disabled={
-                                                            resolvingId ===
-                                                            r.complaint_id
-                                                        }
-                                                        onClick={() =>
-                                                            markResolved(
-                                                                r.complaint_id
-                                                            )
-                                                        }
-                                                    >
-                                                        {resolvingId ===
-                                                        r.complaint_id ? (
-                                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                                        ) : (
-                                                            "Mark Resolved"
-                                                        )}
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
+                                        {r.status}
+                                    </Badge>
+                                </div>
+                                <p className="text-sm text-gray-600 mb-3">
+                                    Reported by{" "}
+                                    <strong>
+                                        {r.sender
+                                            ? `${r.sender.first_name} ${r.sender.last_name}`
+                                            : r.sender_id}
+                                    </strong>{" "}
+                                    for{" "}
+                                    <em className="capitalize">{r.reason}</em>
+                                </p>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <ReportDetailsDialog row={r} />
+                                    {r.status === "pending" && (
+                                        <>
+                                            <Button
+                                                size="sm"
+                                                className="bg-amber-500 text-white hover:bg-amber-600"
+                                                onClick={() =>
+                                                    handleActionWithNote(
+                                                        "ban",
+                                                        r.complaint_id,
+                                                        r.target_item_id,
+                                                        r.item?.user_id,
+                                                        1
+                                                    )
+                                                }
+                                            >
+                                                <Gavel className="w-4 h-4 mr-1" />{" "}
+                                                Minor Violation
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="destructive"
+                                                className="bg-red-600 text-white hover:bg-red-700"
+                                                onClick={() =>
+                                                    handleActionWithNote(
+                                                        "ban",
+                                                        r.complaint_id,
+                                                        r.target_item_id,
+                                                        r.item?.user_id,
+                                                        3
+                                                    )
+                                                }
+                                            >
+                                                <ShieldBan className="w-4 h-4 mr-1" />{" "}
+                                                Major Violation
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                className="bg-green-600 text-white hover:bg-green-700"
+                                                onClick={() =>
+                                                    markResolved(r.complaint_id)
+                                                }
+                                            >
+                                                <CheckCircle className="w-4 h-4 mr-1" />{" "}
+                                                Resolve Only
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() =>
+                                                    rejectReport(r.complaint_id)
+                                                }
+                                            >
+                                                <XCircle className="w-4 h-4 mr-1" />{" "}
+                                                Reject Report
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Resolution Note Dialog */}
+                {noteDialog.open && (
+                    <Dialog
+                        open
+                        onOpenChange={() =>
+                            setNoteDialog({ ...noteDialog, open: false })
+                        }
+                    >
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>
+                                    {noteDialog.action === "ban"
+                                        ? `Confirm ${
+                                              noteDialog.warningAmount === 1
+                                                  ? "Minor"
+                                                  : "Major"
+                                          } Violation`
+                                        : noteDialog.action === "resolve"
+                                        ? "Resolve Report"
+                                        : "Reject Report"}
+                                </DialogTitle>
+                            </DialogHeader>
+                            <div className="mb-3 text-gray-700 text-sm">
+                                {noteDialog.action === "ban" ? (
+                                    <>
+                                        Are you sure you want to ban this item
+                                        and issue{" "}
+                                        <b>+{noteDialog.warningAmount}</b>{" "}
+                                        warning
+                                        {noteDialog.warningAmount > 1 && "s"} to
+                                        its owner?
+                                    </>
+                                ) : noteDialog.action === "resolve" ? (
+                                    <>
+                                        Mark this report as resolved without
+                                        banning or warnings?
+                                    </>
+                                ) : (
+                                    <>
+                                        Reject this report? No action will be
+                                        taken.
+                                    </>
+                                )}
+                            </div>
+                            <div className="mb-2">
+                                <label className="block text-xs font-medium mb-1">
+                                    Resolution Note{" "}
+                                    <span className="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                    className="w-full border rounded p-2 text-sm"
+                                    rows={3}
+                                    value={resolutionNote}
+                                    onChange={(e) =>
+                                        setResolutionNote(e.target.value)
+                                    }
+                                    placeholder="Enter reason or details for this action (required)"
+                                    required
+                                    disabled={noteSubmitting}
+                                />
+                            </div>
+                            <DialogFooter>
+                                <Button
+                                    variant="outline"
+                                    onClick={() =>
+                                        setNoteDialog({
+                                            ...noteDialog,
+                                            open: false,
+                                        })
+                                    }
+                                    disabled={noteSubmitting}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    variant={
+                                        noteDialog.action === "reject"
+                                            ? "destructive"
+                                            : "default"
+                                    }
+                                    disabled={
+                                        noteSubmitting || !resolutionNote.trim()
+                                    }
+                                    onClick={submitNoteAction}
+                                >
+                                    {noteSubmitting ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : noteDialog.action === "ban" ? (
+                                        <>
+                                            <Gavel className="w-4 h-4 mr-1" />{" "}
+                                            Confirm Ban
+                                        </>
+                                    ) : noteDialog.action === "resolve" ? (
+                                        <>
+                                            <CheckCircle className="w-4 h-4 mr-1" />{" "}
+                                            Resolve
+                                        </>
+                                    ) : (
+                                        <>
+                                            <XCircle className="w-4 h-4 mr-1" />{" "}
+                                            Reject
+                                        </>
+                                    )}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                )}
             </div>
         </AdminLayout>
     );
@@ -213,16 +452,33 @@ function ReportDetailsDialog({ row }) {
                 <DialogHeader>
                     <DialogTitle>Report Details</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                        <span>Item ID</span>
-                        <span className="font-mono">
-                            {row.target_item_id || "—"}
-                        </span>
-                    </div>
+                <div className="space-y-4 text-sm">
+                    {row.item?.main_image_url && (
+                        <div className="flex flex-col items-center mb-2">
+                            <img
+                                src={row.item.main_image_url}
+                                alt={row.item.title || "Item image"}
+                                className="max-h-56 rounded-lg border mb-2"
+                                style={{ objectFit: "contain" }}
+                            />
+                            <span className="text-xs text-gray-500">
+                                Item Photo
+                            </span>
+                        </div>
+                    )}
                     <div className="flex justify-between">
                         <span>Item Name</span>
                         <span>{row.item?.title || "—"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Owner</span>
+                        <span>
+                            {row.item?.owner
+                                ? `${row.item.owner.first_name || ""} ${
+                                      row.item.owner.last_name || ""
+                                  }`.trim() || row.item.user_id
+                                : row.item?.user_id || "—"}
+                        </span>
                     </div>
                     <div className="flex justify-between">
                         <span>Reported By</span>
@@ -238,6 +494,7 @@ function ReportDetailsDialog({ row }) {
                         <span>Reason</span>
                         <span className="capitalize">{row.reason}</span>
                     </div>
+                    <Separator />
                     <div>
                         <span className="block text-gray-600 mb-1">
                             Content
@@ -260,7 +517,6 @@ function ReportDetailsDialog({ row }) {
                         <span className="capitalize">{row.status}</span>
                     </div>
                 </div>
-                <DialogFooter></DialogFooter>
             </DialogContent>
         </Dialog>
     );

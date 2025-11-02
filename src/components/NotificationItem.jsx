@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import {
     Bell,
@@ -14,7 +15,6 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
     NOTIFICATION_TYPES,
-    getNotificationNavigationPath,
 } from "../lib/notifications";
 
 const NotificationItem = ({
@@ -22,8 +22,10 @@ const NotificationItem = ({
     onMarkAsRead,
     onNavigate,
     onDismiss,
+    userRole,  // ✅ Pass the current user's role
     compact = false,
 }) => {
+    const navigate = useNavigate();
     const {
         notification_id,
         title,
@@ -31,8 +33,10 @@ const NotificationItem = ({
         type,
         read_at,
         created_at,
-        rental,
-        item,
+        rental_id,
+        item_id,
+        from_user_role,
+        to_user_role,
     } = notification;
 
     const isUnread = !read_at;
@@ -84,6 +88,81 @@ const NotificationItem = ({
         }
     };
 
+    // ✅ Determine navigation path based on notification title/type
+    // ✅ IMPROVED: Determine navigation path based on user role and notification content
+    const getNavigationPath = () => {
+        if (!rental_id) {
+            // No rental context, route based on notification type
+            if (type === NOTIFICATION_TYPES.ITEM || type === NOTIFICATION_TYPES.ADMIN) {
+                return type === NOTIFICATION_TYPES.ADMIN ? "/adminhome" : "/profile";
+            }
+            return "/notifications";
+        }
+
+        // Rental-related notification - determine route based on user's role in this transaction
+
+        // RENTER NOTIFICATIONS (updates about their bookings) → /my-bookings
+        const renterNotificationTitles = [
+            "Booking Submitted",
+            "Booking Approved",
+            "Booking Declined",
+            "Booking Cancelled",
+            "Deposit Verified",
+            "Item On The Way",
+            "Return Confirmed",
+            "Rental Booking Started",
+            "Return Accepted",
+            "Item Delivered Successfully",
+            "Rental Confirmed",
+            "Upload Deposit Proof Required",
+            "Booking Expires Soon",
+            "Rental Ending Soon",
+            "Stay Completed",
+        ];
+
+        // LESSOR/OWNER NOTIFICATIONS (actions requiring owner attention) → /booking-requests
+        const lessorNotificationTitles = [
+            "New Booking Request",
+            "Deposit Proof Received",
+            "Return Process Started",
+            "Return Initiated",
+            "Waiting for Owner Confirmation",
+            "Rental Started",
+            "Item Ready for Pickup",
+            "Guest Checked Out",
+            "Item Return Started",
+            "Rental Completed"
+        ];
+
+        // Check if notification matches renter or lessor patterns
+        const isRenterNotification = renterNotificationTitles.some(t =>
+            title?.includes(t)
+        );
+
+        const isLessorNotification = lessorNotificationTitles.some(t =>
+            title?.includes(t)
+        );
+
+        // Route based on notification type first
+        if (isRenterNotification) {
+            return `/my-bookings?rental=${rental_id}`;
+        }
+
+        if (isLessorNotification) {
+            return `/booking-requests?rental=${rental_id}`;
+        }
+
+        // Fallback: Use userRole as tiebreaker
+        // If user is explicitly a renter in the system, default to my-bookings
+        // Otherwise default to booking-requests (safer for owners/admins)
+        if (userRole === 'renter') {
+            return `/my-bookings?rental=${rental_id}`;
+        }
+
+        // Default to booking-requests for ambiguous cases (owner/admin bias)
+        return `/booking-requests?rental=${rental_id}`;
+    };
+
     const handleClick = () => {
         // Mark as read if unread
         if (isUnread) {
@@ -91,9 +170,23 @@ const NotificationItem = ({
         }
 
         // Navigate to relevant page
-        const path = getNotificationNavigationPath(notification);
-        if (onNavigate && path !== "/notifications") {
-            onNavigate(path);
+        const path = getNavigationPath();
+        console.log("🔗 userRole:", userRole);
+        console.log("🔗 Full notification object:", notification);
+        console.log("🔗 Navigating to:", path, {
+            rental_id,
+            item_id,
+            type,
+            userRole,
+            allKeys: Object.keys(notification)
+        });
+
+        if (path !== "/notifications") {
+            if (onNavigate) {
+                onNavigate(path);
+            } else {
+                navigate(path);
+            }
         }
     };
 
@@ -112,11 +205,10 @@ const NotificationItem = ({
     if (compact) {
         return (
             <div
-                className={`flex items-center gap-3 p-3 border-l-4 cursor-pointer hover:bg-gray-50 transition-colors ${
-                    isUnread
+                className={`flex items-center gap-3 p-3 border-l-4 cursor-pointer hover:bg-gray-50 transition-colors ${isUnread
                         ? "bg-blue-50 border-l-blue-500"
                         : "bg-white border-l-gray-200"
-                }`}
+                    }`}
                 onClick={handleClick}
             >
                 <div className={`p-2 rounded-full ${getTypeColorScheme(type)}`}>
@@ -126,9 +218,8 @@ const NotificationItem = ({
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                         <h4
-                            className={`text-sm font-medium truncate ${
-                                isUnread ? "font-semibold" : ""
-                            }`}
+                            className={`text-sm font-medium truncate ${isUnread ? "font-semibold" : ""
+                                }`}
                         >
                             {title}
                         </h4>
@@ -156,11 +247,11 @@ const NotificationItem = ({
 
     return (
         <Card
-            className={`p-4 cursor-pointer hover:shadow-md transition-all ${
-                isUnread ? "bg-blue-50 border-blue-200" : "bg-white"
-            }`}
+            className={`p-4 cursor-pointer hover:shadow-md transition-all ${isUnread ? "bg-blue-50 border-blue-200" : "bg-white"
+                }`}
+            onClick={handleClick}
         >
-            <div className="flex items-start gap-4" onClick={handleClick}>
+            <div className="flex items-start gap-4">
                 <div className={`p-3 rounded-full ${getTypeColorScheme(type)}`}>
                     {getNotificationIcon(type)}
                 </div>
@@ -170,9 +261,8 @@ const NotificationItem = ({
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                                 <h3
-                                    className={`font-medium text-gray-900 ${
-                                        isUnread ? "font-semibold" : ""
-                                    }`}
+                                    className={`font-medium text-gray-900 ${isUnread ? "font-semibold" : ""
+                                        }`}
                                 >
                                     {title}
                                 </h3>
@@ -185,7 +275,7 @@ const NotificationItem = ({
                                 {message}
                             </p>
 
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 flex-wrap">
                                 <Badge
                                     variant="outline"
                                     className={getTypeColorScheme(type)}
@@ -193,15 +283,15 @@ const NotificationItem = ({
                                     {type}
                                 </Badge>
 
-                                {item && (
+                                {rental_id && (
                                     <span className="text-xs text-gray-500">
-                                        Item: {item.title}
+                                        Rental #{rental_id.substring(0, 8)}
                                     </span>
                                 )}
 
-                                {rental && (
+                                {item_id && (
                                     <span className="text-xs text-gray-500">
-                                        Rental: {rental.status}
+                                        Item #{item_id.substring(0, 8)}
                                     </span>
                                 )}
 

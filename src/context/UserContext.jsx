@@ -37,7 +37,8 @@ export function UserProvider({ children }) {
             setUser(null);
             if (message) {
                 try {
-                    toast.info(message, { duration: 2500 });
+                    // Avoid SweetAlert2 unknown parameter warning
+                    toast.info(message);
                 } catch (_) {
                     // ignore toast errors
                 }
@@ -90,15 +91,25 @@ export function UserProvider({ children }) {
                     const merged = await loadProfile(authUser);
                     if (merged) setUser(merged);
                 } catch (err) {
-                    console.warn(
-                        "Profile refresh failed, logging out:",
-                        err?.message || err
-                    );
-                    const msg =
-                        err?.code === "PROFILE_NOT_FOUND"
-                            ? "Your account was not found. Please sign in again."
-                            : "Your session expired. Please sign in again.";
-                    await forceLogout(msg);
+                    // During onboarding, the users row may not exist yet.
+                    if (err?.code === "PROFILE_NOT_FOUND") {
+                        console.warn(
+                            "Profile not found during refresh; keeping minimal session user and retrying later."
+                        );
+                        setUser({ id: authUser.id, email: authUser.email });
+                        // Retry refresh shortly to pick up the newly inserted profile
+                        setTimeout(() => {
+                            refresh().catch(() => {});
+                        }, 1500);
+                    } else {
+                        console.warn(
+                            "Profile refresh failed, logging out:",
+                            err?.message || err
+                        );
+                        await forceLogout(
+                            "Your session expired. Please sign in again."
+                        );
+                    }
                 }
             } else {
                 localStorage.removeItem("loggedInUser");
@@ -165,15 +176,24 @@ export function UserProvider({ children }) {
                                 if (merged) setUser(merged);
                             })
                             .catch(async (err) => {
-                                console.warn(
-                                    "Auth change profile load failed, logging out:",
-                                    err?.message || err
-                                );
-                                const msg =
-                                    err?.code === "PROFILE_NOT_FOUND"
-                                        ? "Your account was not found. Please sign in again."
-                                        : "Your session expired. Please sign in again.";
-                                await forceLogout(msg);
+                                if (err?.code === "PROFILE_NOT_FOUND") {
+                                    console.warn(
+                                        "Auth change: profile not found (likely onboarding). Keeping minimal user and retrying."
+                                    );
+                                    // Keep minimal session user and retry later instead of logging out
+                                    setUser(minimal);
+                                    setTimeout(() => {
+                                        refresh().catch(() => {});
+                                    }, 1500);
+                                } else {
+                                    console.warn(
+                                        "Auth change profile load failed, logging out:",
+                                        err?.message || err
+                                    );
+                                    await forceLogout(
+                                        "Your session expired. Please sign in again."
+                                    );
+                                }
                             });
                     }
                 } else if (event === "SIGNED_OUT") {

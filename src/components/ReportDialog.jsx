@@ -141,7 +141,7 @@ export default function ReportDialog({
                                 onChange={(e) => setContent(e.target.value)}
                                 rows={4}
                                 className="w-full border rounded p-2 text-sm"
-                                placeholder="Provide context, screenshots, or specifics"
+                                placeholder="Provide a context make it easier for us to review your report."
                             />
                         </div>
                         <DialogFooter>

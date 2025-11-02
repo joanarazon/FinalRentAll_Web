@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import ReportDialog from "@/components/ReportDialog";
 import { handleBookingStatusChange } from "../lib/notificationEvents";
+import { sendFCMNotificationFromWeb } from "../hooks/notification";
 
 function StatusBadge({ status }) {
     const s = String(status || "").toLowerCase();
@@ -286,10 +287,10 @@ export default function OwnerBookingRequests({
                 .from("rental_transactions")
                 .select(
                     `
-                    *,
-                    items!inner(title, user_id),
-                    renter:renter_id(first_name, last_name)
-                `
+        *,
+        items!inner(title, user_id),
+        renter:renter_id(first_name, last_name)
+      `
                 )
                 .eq("rental_id", txId)
                 .single();
@@ -301,6 +302,7 @@ export default function OwnerBookingRequests({
                 .update({ status: "confirmed" })
                 .eq("rental_id", txId)
                 .eq("status", "pending");
+
             if (error) {
                 toast.error(
                     error.message?.includes("booked")
@@ -311,13 +313,32 @@ export default function OwnerBookingRequests({
             } else {
                 toast.success("Request approved");
 
-                // Trigger notification
-                try {
-                    const ownerName =
-                        user.first_name && user.last_name
-                            ? `${user.first_name} ${user.last_name}`.trim()
-                            : "The owner";
+                // ✅ SEND BOTH: FCM (web-to-mobile) AND handleBookingStatusChange (web-to-web)
 
+                const ownerName =
+                    user.first_name && user.last_name
+                        ? `${user.first_name} ${user.last_name}`.trim()
+                        : "The owner";
+
+                // 1️⃣ Send FCM notification to mobile renter
+                try {
+                    await sendFCMNotificationFromWeb(
+                        bookingBefore.renter_id,
+                        "Booking Confirmed!",
+                        `${ownerName} has confirmed your booking for "${bookingBefore.items.title}". Please submit your deposit.`,
+                        {
+                            type: 'booking_confirmed',
+                            rental_id: bookingBefore.rental_id,
+                            item_id: bookingBefore.item_id
+                        }
+                    );
+                    console.log('✅ FCM notification sent to renter');
+                } catch (notificationError) {
+                    console.error('Failed to send FCM notification:', notificationError);
+                }
+
+                // 2️⃣ Send in-app notification to web renter (handleBookingStatusChange)
+                try {
                     await handleBookingStatusChange(
                         "pending",
                         "confirmed",
@@ -328,9 +349,10 @@ export default function OwnerBookingRequests({
                             owner: { full_name: ownerName },
                         }
                     );
+                    console.log('✅ In-app notification sent to renter');
                 } catch (notificationError) {
                     console.error(
-                        "Failed to send approval notification:",
+                        "Failed to send in-app notification:",
                         notificationError
                     );
                 }
@@ -346,15 +368,14 @@ export default function OwnerBookingRequests({
     const confirmReturn = async (txId) => {
         setActionId(txId);
         try {
-            // Get booking details before update
             const { data: bookingBefore, error: fetchError } = await supabase
                 .from("rental_transactions")
                 .select(
                     `
-                    *,
-                    items!inner(title, user_id),
-                    renter:renter_id(first_name, last_name)
-                `
+        *,
+        items!inner(title, user_id),
+        renter:renter_id(first_name, last_name)
+      `
                 )
                 .eq("rental_id", txId)
                 .single();
@@ -369,15 +390,33 @@ export default function OwnerBookingRequests({
                 })
                 .eq("rental_id", txId)
                 .eq("status", "awaiting_owner_confirmation");
+
             if (error) {
-                toast.error(
-                    `Confirm return failed: ${error.message || "Unknown error"}`
-                );
+                toast.error(`Confirm return failed: ${error.message || "Unknown error"}`);
                 throw error;
             } else {
                 toast.success("Return confirmed. Rental completed.");
 
-                // Trigger notification
+                // ✅ Send FCM notification to mobile
+                try {
+                    const ownerName =
+                        user.first_name && user.last_name
+                            ? `${user.first_name} ${user.last_name}`.trim()
+                            : "The owner";
+
+                    await sendFCMNotificationFromWeb(
+                        bookingBefore.renter_id,
+                        "Rental Completed!",
+                        `${ownerName} has confirmed your return. Your rental is complete!`,
+                        {
+                            type: 'booking_completed',
+                            rental_id: bookingBefore.rental_id,
+                            item_id: bookingBefore.item_id
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error('Failed to send FCM notification:', notificationError);
+                }
                 try {
                     const ownerName =
                         user.first_name && user.last_name
@@ -464,15 +503,14 @@ export default function OwnerBookingRequests({
     const reject = async (txId) => {
         setActionId(txId);
         try {
-            // Get booking details before update
             const { data: bookingBefore, error: fetchError } = await supabase
                 .from("rental_transactions")
                 .select(
                     `
-                    *,
-                    items!inner(title, user_id),
-                    renter:renter_id(first_name, last_name)
-                `
+        *,
+        items!inner(title, user_id),
+        renter:renter_id(first_name, last_name)
+      `
                 )
                 .eq("rental_id", txId)
                 .single();
@@ -484,21 +522,36 @@ export default function OwnerBookingRequests({
                 .update({ status: "rejected" })
                 .eq("rental_id", txId)
                 .eq("status", "pending");
+
             if (error) {
-                toast.error(
-                    `Reject failed: ${error.message || "Unknown error"}`
-                );
+                toast.error(`Reject failed: ${error.message || "Unknown error"}`);
                 throw error;
             } else {
                 toast.success("Request rejected");
 
-                // Trigger notification
-                try {
-                    const ownerName =
-                        user.first_name && user.last_name
-                            ? `${user.first_name} ${user.last_name}`.trim()
-                            : "The owner";
+                const ownerName =
+                    user.first_name && user.last_name
+                        ? `${user.first_name} ${user.last_name}`.trim()
+                        : "The owner";
 
+                // 1️⃣ Send FCM to mobile
+                try {
+                    await sendFCMNotificationFromWeb(
+                        bookingBefore.renter_id,
+                        "Booking Rejected",
+                        `${ownerName} has rejected your booking request for "${bookingBefore.items.title}".`,
+                        {
+                            type: 'booking_rejected',
+                            rental_id: bookingBefore.rental_id,
+                            item_id: bookingBefore.item_id
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error('Failed to send FCM notification:', notificationError);
+                }
+
+                // 2️⃣ Send in-app notification to web
+                try {
                     await handleBookingStatusChange(
                         "pending",
                         "rejected",
@@ -510,10 +563,7 @@ export default function OwnerBookingRequests({
                         }
                     );
                 } catch (notificationError) {
-                    console.error(
-                        "Failed to send rejection notification:",
-                        notificationError
-                    );
+                    console.error('Failed to send in-app notification:', notificationError);
                 }
             }
         } catch (e) {
@@ -527,15 +577,14 @@ export default function OwnerBookingRequests({
     const verifyDeposit = async (txId) => {
         setActionId(txId);
         try {
-            // Get booking details before update
             const { data: bookingBefore, error: fetchError } = await supabase
                 .from("rental_transactions")
                 .select(
                     `
-                    *,
-                    items!inner(title, user_id),
-                    renter:renter_id(first_name, last_name)
-                `
+        *,
+        items!inner(title, user_id),
+        renter:renter_id(first_name, last_name)
+      `
                 )
                 .eq("rental_id", txId)
                 .single();
@@ -547,15 +596,33 @@ export default function OwnerBookingRequests({
                 .update({ status: "on_the_way" })
                 .eq("rental_id", txId)
                 .eq("status", "deposit_submitted");
+
             if (error) {
-                toast.error(
-                    `Verify failed: ${error.message || "Unknown error"}`
-                );
+                toast.error(`Verify failed: ${error.message || "Unknown error"}`);
                 throw error;
             } else {
                 toast.success("Deposit verified. Marked as On the Way.");
 
-                // Trigger notification
+                // ✅ Send FCM notification to mobile
+                try {
+                    const ownerName =
+                        user.first_name && user.last_name
+                            ? `${user.first_name} ${user.last_name}`.trim()
+                            : "The owner";
+
+                    await sendFCMNotificationFromWeb(
+                        bookingBefore.renter_id,
+                        "Deposit Verified - On The Way",
+                        `${ownerName} has verified your deposit. "${bookingBefore.items.title}" is on the way!`,
+                        {
+                            type: 'on_the_way',
+                            rental_id: bookingBefore.rental_id,
+                            item_id: bookingBefore.item_id
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error('Failed to send FCM notification:', notificationError);
+                }
                 try {
                     const ownerName =
                         user.first_name && user.last_name
@@ -641,9 +708,8 @@ export default function OwnerBookingRequests({
         currentData = currentData.filter((booking) => {
             const itemTitle = booking.items?.title || booking.item?.title || "";
             const renterName = booking.renter
-                ? `${booking.renter.first_name || ""} ${
-                      booking.renter.last_name || ""
-                  }`.trim()
+                ? `${booking.renter.first_name || ""} ${booking.renter.last_name || ""
+                    }`.trim()
                 : "";
             const status = booking.status || "";
 
@@ -701,21 +767,19 @@ export default function OwnerBookingRequests({
                                 <button
                                     key={tab.key}
                                     onClick={() => setActiveTab(tab.key)}
-                                    className={`group relative flex items-center gap-2.5 px-5 py-3 rounded-xl font-semibold text-sm whitespace-nowrap transition-all duration-300 ${
-                                        isActive
-                                            ? "bg-gradient-to-r from-[#FFAB00] to-[#FFAB00]/90 text-[#1E1E1E] shadow-lg shadow-[#FFAB00]/30 scale-105"
-                                            : "bg-transparent text-[#1E1E1E]/60 hover:bg-[#FAF5EF] hover:text-[#1E1E1E] hover:scale-102"
-                                    }`}
+                                    className={`group relative flex items-center gap-2.5 px-5 py-3 rounded-xl font-semibold text-sm whitespace-nowrap transition-all duration-300 ${isActive
+                                        ? "bg-gradient-to-r from-[#FFAB00] to-[#FFAB00]/90 text-[#1E1E1E] shadow-lg shadow-[#FFAB00]/30 scale-105"
+                                        : "bg-transparent text-[#1E1E1E]/60 hover:bg-[#FAF5EF] hover:text-[#1E1E1E] hover:scale-102"
+                                        }`}
                                 >
                                     <span className="relative z-10">
                                         {tab.label}
                                     </span>
                                     <Badge
-                                        className={`relative z-10 ${
-                                            isActive
-                                                ? "bg-[#1E1E1E] text-white shadow-md"
-                                                : "bg-[#1E1E1E]/10 text-[#1E1E1E]/70 group-hover:bg-[#FFAB00]/20"
-                                        } border-none font-bold px-2.5 py-0.5 text-xs transition-all`}
+                                        className={`relative z-10 ${isActive
+                                            ? "bg-[#1E1E1E] text-white shadow-md"
+                                            : "bg-[#1E1E1E]/10 text-[#1E1E1E]/70 group-hover:bg-[#FFAB00]/20"
+                                            } border-none font-bold px-2.5 py-0.5 text-xs transition-all`}
                                     >
                                         {count}
                                     </Badge>
@@ -1158,7 +1222,7 @@ function ActionBar({
 }
 
 function ImagePreviewThumb({ src, alt }) {
-    const imgSrc = src || "/vite.svg";
+    const imgSrc = src || "/logo.png";
     return (
         <Dialog>
             <DialogTrigger asChild>
@@ -1213,7 +1277,7 @@ function RequestDetailsDialog({ row, awaiting = false }) {
                 </DialogHeader>
                 <div className="mb-4">
                     <img
-                        src={row.items?.main_image_url || "/vite.svg"}
+                        src={row.items?.main_image_url || "/logo.png"}
                         alt={row.items?.title || "Item"}
                         className="w-full h-48 object-cover rounded-lg border-2 border-[#1E1E1E]/10"
                         onError={(e) =>
@@ -1283,8 +1347,8 @@ function RequestDetailsDialog({ row, awaiting = false }) {
                                 <span className="text-[#1E1E1E] font-semibold text-xs">
                                     {row.renter_return_marked_at
                                         ? new Date(
-                                              row.renter_return_marked_at
-                                          ).toLocaleString()
+                                            row.renter_return_marked_at
+                                        ).toLocaleString()
                                         : "—"}
                                 </span>
                             </div>
@@ -1295,8 +1359,8 @@ function RequestDetailsDialog({ row, awaiting = false }) {
                                 <span className="text-[#1E1E1E] font-semibold text-xs">
                                     {row.owner_confirmed_at
                                         ? new Date(
-                                              row.owner_confirmed_at
-                                          ).toLocaleString()
+                                            row.owner_confirmed_at
+                                        ).toLocaleString()
                                         : "—"}
                                 </span>
                             </div>

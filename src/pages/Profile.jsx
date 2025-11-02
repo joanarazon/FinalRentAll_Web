@@ -8,11 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
     Camera,
     EllipsisVertical,
     Pencil,
-    Plus,
-    Minus,
     Trash2,
     ChevronLeft,
     Calendar,
@@ -21,6 +25,7 @@ import {
     MapPin,
 } from "lucide-react";
 import TopMenu from "@/components/topMenu";
+import EditProfileModal from "@/components/EditProfileModal";
 import { useNavigate, useParams } from "react-router-dom";
 import { getLessorRatingStats } from "@/lib/reviews";
 import BookItemModal from "@/components/BookItemModal";
@@ -54,6 +59,7 @@ export default function Profile() {
     const [uploading, setUploading] = useState(false);
     const [rentOpen, setRentOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
+    const [editOpen, setEditOpen] = useState(false);
 
     const initials = useMemo(() => {
         const f = (profile?.first_name || "").trim();
@@ -171,11 +177,18 @@ export default function Profile() {
             }
             if (error) throw error;
             // Filter out rejected items in case of fallback query (when item_status column doesn't exist)
-            const filteredData = (data || []).filter((item) => {
+            let filteredData = (data || []).filter((item) => {
                 // If item_status doesn't exist, assume it's approved (legacy items)
                 // If item_status exists, exclude rejected items
                 return !item.item_status || item.item_status !== "rejected";
             });
+
+            // If viewing someone else's profile, also filter out banned items
+            if (!isOwnProfile) {
+                filteredData = filteredData.filter(
+                    (item) => item.item_status !== "banned"
+                );
+            }
 
             const withImages = await Promise.all(
                 filteredData.map(async (it) => ({
@@ -192,7 +205,7 @@ export default function Profile() {
         } finally {
             setLoadingItems(false);
         }
-    }, [profileUserId]);
+    }, [profileUserId, isOwnProfile]);
 
     useEffect(() => {
         if (!profileUserId) return;
@@ -316,10 +329,31 @@ export default function Profile() {
                                 </>
                             ) : (
                                 <>
-                                    <h1 className="text-3xl font-bold text-[#1E1E1E] mb-3">
-                                        {(profile?.first_name || "").trim()}{" "}
-                                        {(profile?.last_name || "").trim()}
-                                    </h1>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h1 className="text-3xl font-bold text-[#1E1E1E]">
+                                            {(profile?.first_name || "").trim()}{" "}
+                                            {(profile?.last_name || "").trim()}
+                                        </h1>
+                                        {isOwnProfile && !loadingProfile && (
+                                            <Button
+                                                variant="outline"
+                                                onClick={() =>
+                                                    setEditOpen(true)
+                                                }
+                                            >
+                                                Edit Profile
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {/* Edit Profile Modal */}
+                                    {isOwnProfile && (
+                                        <EditProfileModal
+                                            open={editOpen}
+                                            onOpenChange={setEditOpen}
+                                            profile={profile}
+                                            onUpdated={loadProfile}
+                                        />
+                                    )}
                                     <div className="flex flex-wrap gap-4 text-sm text-[#1E1E1E]/70 mb-4">
                                         <div className="flex items-center gap-1.5">
                                             <Calendar className="h-4 w-4" />
@@ -584,6 +618,11 @@ function OwnedItemsGrid({ items, isOwner, onChanged, onRent }) {
                                             Under Review
                                         </span>
                                     )}
+                                    {isOwner && it.item_status === "banned" && (
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                            Banned
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="flex items-baseline gap-1">
                                     <span className="text-2xl font-bold text-[#FFAB00]">
@@ -648,24 +687,6 @@ function OwnerItemActions({ item, onChanged }) {
     const [busy, setBusy] = useState(false);
     const toast = useToastApi();
 
-    const updateQuantity = async (delta) => {
-        try {
-            setBusy(true);
-            const next = Math.max(0, (Number(item.quantity) || 0) + delta);
-            const { error } = await supabase
-                .from("items")
-                .update({ quantity: next })
-                .eq("item_id", item.item_id);
-            if (error) throw error;
-            toast.success(`Quantity ${delta > 0 ? "increased" : "decreased"}.`);
-            onChanged?.();
-        } catch (e) {
-            toast.error(e.message || "Update failed");
-        } finally {
-            setBusy(false);
-        }
-    };
-
     const deletePost = async () => {
         if (!confirm("Delete this post? This cannot be undone.")) return;
         try {
@@ -701,32 +722,6 @@ function OwnerItemActions({ item, onChanged }) {
                 <DropdownMenuContent align="end" className="min-w-48">
                     <DropdownMenuItem onClick={() => setEditOpen(true)}>
                         <Pencil className="w-4 h-4" /> Edit post
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                        onClick={() => {
-                            const input = prompt("How many units to add?", "1");
-                            const n = Number.parseInt(input || "0", 10);
-                            if (!Number.isFinite(n) || n <= 0) return;
-                            updateQuantity(n);
-                        }}
-                        disabled={busy}
-                    >
-                        <Plus className="w-4 h-4" /> Add units…
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                        onClick={() => {
-                            const input = prompt(
-                                "How many units to subtract?",
-                                "1"
-                            );
-                            const n = Number.parseInt(input || "0", 10);
-                            if (!Number.isFinite(n) || n <= 0) return;
-                            updateQuantity(-n);
-                        }}
-                        disabled={busy || (Number(item.quantity) || 0) <= 0}
-                    >
-                        <Minus className="w-4 h-4" /> Subtract units…
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -817,21 +812,14 @@ function EditItemModal({ open, onOpenChange, item, onSaved }) {
         }
     };
 
-    if (!open) return null;
     return (
-        <div className="fixed inset-0 bg-[#1E1E1E]/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-2xl font-bold text-[#1E1E1E]">
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle className="text-2xl font-bold text-[#1E1E1E]">
                         Edit Post
-                    </h3>
-                    <button
-                        className="text-[#1E1E1E]/60 hover:text-[#1E1E1E] transition-colors"
-                        onClick={() => onOpenChange(false)}
-                    >
-                        <span className="text-2xl">×</span>
-                    </button>
-                </div>
+                    </DialogTitle>
+                </DialogHeader>
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-[#1E1E1E] mb-1.5">
@@ -944,7 +932,7 @@ function EditItemModal({ open, onOpenChange, item, onSaved }) {
                         {saving ? "Saving..." : "Save Changes"}
                     </Button>
                 </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

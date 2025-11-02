@@ -33,6 +33,10 @@ import { FavoritesProvider } from "./context/FavoritesContext.jsx";
 import Loading from "./components/Loading.jsx";
 import PendingVerification from "./pages/PendingVerification.jsx";
 import Chat from "./components/Chat.jsx";
+import TotalUser from "./pages/admin/pages/TotalUsers.jsx";
+import ForgotPassword from "./pages/admin/pages/ForgotPassword.jsx";
+
+import Banned from "./pages/Banned";
 
 import { generateToken } from "./notification/firebase.js";
 
@@ -41,6 +45,14 @@ function RoleAwareLanding() {
     if (loading) return <Loading />;
     const role = user?.role;
     if (!user) return <Login />;
+    // Banned user check
+    if (
+        user.role === "banned" ||
+        user.account_status === "banned" ||
+        user.is_banned
+    ) {
+        return <Navigate to="/banned" replace />;
+    }
     if (typeof role === "undefined") return <Loading />;
     if (role === "admin") return <Navigate to="/adminhome" replace />;
     if (role === "user") return <Navigate to="/home" replace />;
@@ -69,6 +81,7 @@ export default function App() {
                             path="/pending-verification"
                             element={<PendingVerification />}
                         />
+                        <Route path="/forgot-password" element={<ForgotPassword />} />
                         {/* User group */}
                         <Route
                             element={
@@ -130,7 +143,10 @@ export default function App() {
                                 path="/reported-items"
                                 element={<ReportedItems />}
                             />
+                            <Route path="/total-users" element={<TotalUser />} />
+                            
                         </Route>
+                        <Route path="/banned" element={<Banned />} />
                         {/** Pending Bookings route hidden per product change (handled by lessors) **/}
                     </Routes>
                 </Router>

@@ -52,6 +52,7 @@ function Login() {
         // Fallback by role
         if (role === "admin") return navigate("/adminhome", { replace: true });
         if (role === "user") return navigate("/home", { replace: true });
+        if (role === "banned") return navigate("/banned", { replace: true });
         return navigate("/not-authorized", { replace: true });
     };
     const toast = useToastApi();
@@ -92,10 +93,33 @@ function Login() {
                 throw new Error("No role assigned to this account");
             }
 
+            // Banned check: if banned, redirect and skip toast/navigation
+            if (
+                profile.status === "banned" ||
+                profile.account_status === "banned" ||
+                profile.is_banned
+            ) {
+                // Store in localStorage for RequireAuth/guards
+                const userInfo = {
+                    id: authUser.id,
+                    email: authUser.email,
+                    ...profile,
+                };
+                localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
+                await delay(MIN_NAV_DELAY);
+                return navigate("/banned", { replace: true });
+            }
+
             if (profile.role === "unverified") {
                 toast.info("Your account is pending admin verification.");
                 await delay(MIN_NAV_DELAY);
                 return navigate("/pending-verification", { replace: true });
+            }
+
+            if (profile.role === "banned") {
+                toast.info("Your account is banned.");
+                await delay(MIN_NAV_DELAY);
+                return navigate("/banned", { replace: true });
             }
 
             // Store combined auth + profile in localStorage (omit sensitive fields; none here)
@@ -184,6 +208,22 @@ function Login() {
                 throw new Error("No role assigned to this account");
             }
 
+            // Banned check: if banned, redirect and skip toast/navigation
+            if (
+                profile.status === "banned" ||
+                profile.account_status === "banned" ||
+                profile.is_banned
+            ) {
+                const userInfo = {
+                    id: userId,
+                    email: userEmail,
+                    ...profile,
+                };
+                localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
+                await delay(MIN_NAV_DELAY);
+                return navigate("/banned", { replace: true });
+            }
+
             if (profile.role === "unverified") {
                 toast.info("Your account is pending admin verification.");
                 await delay(MIN_NAV_DELAY);
@@ -213,7 +253,7 @@ function Login() {
             <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
                 <div className="w-[600px] max-w-full h-auto bg-white shadow-lg rounded-2xl flex flex-col items-center p-6">
                     <img
-                        src={rentLogo}
+                        src='logo.png'
                         alt="Logo"
                         className="w-20 h-20 object-contain"
                     />
@@ -233,10 +273,11 @@ function Login() {
                         <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
                             <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "password"
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
+                                    loginMethod === "password"
                                         ? "bg-[#1e1e1e] text-white shadow"
                                         : "text-gray-700 hover:bg-gray-200"
-                                    }`}
+                                }`}
                                 onClick={() => setLoginMethod("password")}
                             >
                                 <Lock size={16} />
@@ -244,42 +285,44 @@ function Login() {
                             </button>
                             <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "email_otp"
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
+                                    loginMethod === "email_otp"
                                         ? "bg-[#1e1e1e] text-white shadow"
                                         : "text-gray-700 hover:bg-gray-200"
-                                    }`}
+                                }`}
                                 onClick={() => setLoginMethod("email_otp")}
                             >
                                 <Mail size={16} />
                                 Email OTP
                             </button>
-                            <button
+                            {/* <button
                                 type="button"
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${loginMethod === "sms_otp"
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition ${
+                                    loginMethod === "sms_otp"
                                         ? "bg-[#1e1e1e] text-white shadow"
                                         : "text-gray-700 hover:bg-gray-200"
-                                    }`}
+                                }`}
                                 onClick={() => setLoginMethod("sms_otp")}
                             >
                                 <Phone size={16} />
                                 Phone OTP
-                            </button>
+                            </button> */}
                         </div>
 
                         {/* Email (shared for password and email OTP) */}
                         {(loginMethod === "password" ||
                             loginMethod === "email_otp") && (
-                                <div className="mb-4">
-                                    <input
-                                        className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400 mb-1"
-                                        id="email"
-                                        type="email"
-                                        placeholder="Enter email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                    />
-                                </div>
-                            )}
+                            <div className="mb-4">
+                                <input
+                                    className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400 mb-1"
+                                    id="email"
+                                    type="email"
+                                    placeholder="Enter email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                />
+                            </div>
+                        )}
 
                         {/* Password login */}
                         {loginMethod === "password" && (
@@ -299,7 +342,7 @@ function Login() {
                                 <div>
                                     <a
                                         className="inline-block align-baseline font-bold text-sm text-[#F09B35] hover:text-[#DB7C0B]"
-                                        href="#"
+                                        href="/forgot-password"
                                     >
                                         Forgot Password?
                                     </a>

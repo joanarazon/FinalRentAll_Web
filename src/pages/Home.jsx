@@ -2,31 +2,89 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useUser } from "../hooks/useUser";
+import { useRecommendations } from "../hooks/useRecommendations";
 import TopMenu from "../components/topMenu";
 import ItemCard from "../components/ItemCard";
 import AddItemModal from "../components/AddItemModal";
+import RecommendationsSection from "../components/RecommendationsSection";
 import { supabase } from "../../supabaseClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import BookItemModal from "../components/BookItemModal";
 import { useFavorites } from "../context/FavoritesContext.jsx";
 import { ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 function Home() {
     const user = useUser();
+    const navigate = useNavigate();
     const [addOpen, setAddOpen] = useState(false);
-    const [categories, setCategories] = useState([]); // {category_id, name}
+    const [categories, setCategories] = useState([]);
     const [selectedCategoryId, setSelectedCategoryId] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
     const [bookOpen, setBookOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
-
     const [selectedLocation, setSelectedLocation] = useState("");
     const [priceRange, setPriceRange] = useState([0, 1000]);
     const [maxPrice, setMaxPrice] = useState(1000);
 
     const { favorites, toggleFavorite, isFavorited } = useFavorites();
+
+    // Initialize recommendations hook
+    const {
+        recommendations,
+        loading: recsLoading,
+        userProfile,
+        trackItemView,
+        trackFavorite,
+        trackSearch,
+        fetchRecommendations
+    } = useRecommendations(user?.id);
+
+    const getOrCreateConversation = async (currentUserId, otherUserId, itemId, itemTitle) => {
+        try {
+            const { data: existingConversation, error: checkError } = await supabase
+                .from("conversations")
+                .select("id")
+                .or(
+                    `and(user1_id.eq.${currentUserId},user2_id.eq.${otherUserId}),and(user1_id.eq.${otherUserId},user2_id.eq.${currentUserId})`
+                )
+                .single();
+
+            if (checkError && checkError.code !== "PGRST116") {
+                throw checkError;
+            }
+
+            if (existingConversation) {
+                return existingConversation.id;
+            }
+
+            const { data: newConversation, error: createError } = await supabase
+                .from("conversations")
+                .insert([
+                    {
+                        user1_id: currentUserId,
+                        user2_id: otherUserId,
+                        item_id: itemId,
+                        last_message: `Interested in: ${itemTitle}`,
+                        last_message_at: new Date().toISOString(),
+                    },
+                ])
+                .select()
+                .single();
+
+            if (createError) throw createError;
+            return newConversation.id;
+        } catch (error) {
+            console.error("Error in getOrCreateConversation:", error);
+            throw error;
+        }
+    };
+
+    const navigateToChat = (conversationId, otherUserId, itemTitle, itemId) => {
+        navigate(`/chat?conversationId=${conversationId}&otherUserId=${otherUserId}&itemId=${itemId}`);
+    };
 
     const fetchCategories = useCallback(async () => {
         const { data, error } = await supabase
@@ -135,9 +193,7 @@ function Home() {
                                         "quantity, start_date, end_date, status"
                                     )
                                     .eq("item_id", it.item_id)
-                                    .in("status", consumingStatuses)
-                                    .lte("start_date", todayStr)
-                                    .gte("end_date", todayStr),
+                                    .in("status", consumingStatuses),
                                 supabase
                                     .from("rental_transactions")
                                     .select(
@@ -152,26 +208,13 @@ function Home() {
                             if (cErr) throw cErr;
                             if (dErr) throw dErr;
 
-                            // Debug logging for Home page
-                            console.log(
-                                "Home availability check for item:",
-                                it.item_id
-                            );
-                            console.log("Today date:", todayStr);
-                            console.log("Total item quantity:", it.quantity);
-                            console.log("Consuming bookings:", consumeRows);
-                            console.log("Departed bookings:", departedRows);
-
                             const sum = (rows) =>
                                 (rows || []).reduce(
-                                    (acc, r) => acc + (Number(r.quantity) || 1),
+                                    (acc, r) => acc + (Number(r.quantity) || 0),
                                     0
                                 );
                             const consumeSum = sum(consumeRows);
                             const departedSum = sum(departedRows);
-
-                            console.log("Consume sum:", consumeSum);
-                            console.log("Departed sum:", departedSum);
 
                             const baseCapacity =
                                 (Number(it.quantity) || 0) + departedSum;
@@ -179,9 +222,6 @@ function Home() {
                                 0,
                                 baseCapacity - consumeSum
                             );
-
-                            console.log("Base capacity:", baseCapacity);
-                            console.log("Home remaining units:", remaining);
 
                             return remaining;
                         } catch (e) {
@@ -247,6 +287,27 @@ function Home() {
         fetchItems();
     }, [fetchItems]);
 
+    // Track search terms with debounce
+    useEffect(() => {
+        if (searchTerm && searchTerm.trim().length > 0) {
+            const debounce = setTimeout(() => {
+                trackSearch(searchTerm);
+            }, 1000);
+            return () => clearTimeout(debounce);
+        }
+    }, [searchTerm, trackSearch]);
+
+    // Fetch recommendations after items are loaded
+    useEffect(() => {
+        if (user?.id && items.length > 0 && !loading && categories.length > 0) {
+            const timer = setTimeout(() => {
+                console.log('Fetching recommendations with', items.length, 'items');
+                fetchRecommendations(items, categories);
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [user?.id, items.length, loading, categories.length]);
+
     useEffect(() => {
         const channel = supabase
             .channel("items_changes")
@@ -306,6 +367,44 @@ function Home() {
         priceRange[0] !== 0 ||
         priceRange[1] !== maxPrice;
 
+    // Enhanced toggle favorite with tracking
+    const handleToggleFavorite = useCallback((item) => {
+        const itemId = item.item_id || item.raw?.item_id;
+        const wasFavorited = isFavorited(itemId);
+        toggleFavorite(item);
+        trackFavorite(item.raw || item, !wasFavorited);
+    }, [toggleFavorite, isFavorited, trackFavorite]);
+
+    // Handle item click (for booking) with tracking
+    const handleItemClick = useCallback((item) => {
+        trackItemView(item.raw || item);
+        setSelectedItem(item.raw || item);
+        setBookOpen(true);
+    }, [trackItemView]);
+
+    // Handle message owner with tracking
+    const handleMessageOwner = useCallback(async (item) => {
+        trackItemView(item.raw || item);
+        try {
+            let conversationId = await getOrCreateConversation(
+                user.id,
+                item.ownerId,
+                item.raw?.item_id || item.item_id,
+                item.title
+            );
+            navigateToChat(conversationId, item.ownerId, item.title, item.raw?.item_id || item.item_id);
+        } catch (error) {
+            console.error("Error starting conversation:", error);
+            import("sweetalert2").then(({ default: Swal }) =>
+                Swal.fire({
+                    icon: "error",
+                    title: "Error",
+                    text: "Failed to start conversation. Please try again.",
+                })
+            );
+        }
+    }, [user, trackItemView]);
+
     if (!user) return <p>Loading...</p>;
 
     return (
@@ -316,12 +415,11 @@ function Home() {
                 setSearchTerm={setSearchTerm}
             />
 
-            {/* Filters - non-sticky to avoid overlap issues */}
+            {/* Filters */}
             <div className="bg-card border-b border-border shadow-sm">
                 <div className="px-4 md:px-8 lg:px-16 xl:px-24 py-4">
                     {/* Desktop: All filters in one row */}
                     <div className="hidden md:flex items-center gap-4 flex-wrap">
-                        {/* Category Dropdown */}
                         <div className="relative min-w-[180px]">
                             <select
                                 value={selectedCategoryId}
@@ -343,7 +441,6 @@ function Home() {
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
 
-                        {/* Location Dropdown */}
                         <div className="relative min-w-[180px]">
                             <select
                                 value={selectedLocation}
@@ -362,57 +459,71 @@ function Home() {
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
 
-                        {/* Price Range */}
-                        <div className="flex items-center gap-3 min-w-[280px]">
+                        <div className="flex items-center gap-3 min-w-[320px]">
                             <span className="text-sm font-medium text-foreground whitespace-nowrap">
                                 Price:
                             </span>
-                            <div className="flex-1 flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    ₱{priceRange[0]}
+                            <div className="flex items-center gap-3">
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                        ₱
+                                    </span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={priceRange[0] || ""}
+                                        onChange={(e) => {
+                                            const value = Math.max(
+                                                0,
+                                                Number(e.target.value) || 0
+                                            );
+                                            if (
+                                                priceRange[1] > 0 &&
+                                                value > priceRange[1]
+                                            ) {
+                                                setPriceRange([
+                                                    priceRange[1],
+                                                    priceRange[1],
+                                                ]);
+                                            } else {
+                                                setPriceRange([
+                                                    value,
+                                                    priceRange[1],
+                                                ]);
+                                            }
+                                        }}
+                                        className="w-28 pl-6 pr-2 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-[#FFAB00] transition-all"
+                                        placeholder="Min"
+                                    />
+                                </div>
+                                <span className="text-sm text-muted-foreground font-medium">
+                                    to
                                 </span>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max={maxPrice}
-                                    value={priceRange[0]}
-                                    onChange={(e) =>
-                                        setPriceRange([
-                                            Number(e.target.value),
-                                            priceRange[1],
-                                        ])
-                                    }
-                                    className="flex-1 h-2 bg-border rounded-lg appearance-none cursor-pointer"
-                                    style={{
-                                        accentColor: "#FFAB00",
-                                    }}
-                                />
-                                <span className="text-xs text-muted-foreground">
-                                    -
-                                </span>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max={maxPrice}
-                                    value={priceRange[1]}
-                                    onChange={(e) =>
-                                        setPriceRange([
-                                            priceRange[0],
-                                            Number(e.target.value),
-                                        ])
-                                    }
-                                    className="flex-1 h-2 bg-border rounded-lg appearance-none cursor-pointer"
-                                    style={{
-                                        accentColor: "#FFAB00",
-                                    }}
-                                />
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    ₱{priceRange[1]}
-                                </span>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                        ₱
+                                    </span>
+                                    <input
+                                        type="number"
+                                        min={priceRange[0]}
+                                        value={priceRange[1] || ""}
+                                        onChange={(e) => {
+                                            const value = Math.max(
+                                                priceRange[0],
+                                                Number(e.target.value) || 0
+                                            );
+                                            setPriceRange([
+                                                priceRange[0],
+                                                value,
+                                            ]);
+                                        }}
+                                        className="w-28 pl-6 pr-2 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-[#FFAB00] transition-all"
+                                        placeholder="Max"
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        {/* Clear Filters Button */}
                         {hasActiveFilters && (
                             <button
                                 onClick={clearFilters}
@@ -425,7 +536,6 @@ function Home() {
 
                     {/* Mobile: Stacked filters */}
                     <div className="flex md:hidden flex-col gap-3">
-                        {/* Category Dropdown */}
                         <div className="relative">
                             <select
                                 value={selectedCategoryId}
@@ -446,8 +556,6 @@ function Home() {
                             </select>
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
-
-                        {/* Location Dropdown */}
                         <div className="relative">
                             <select
                                 value={selectedLocation}
@@ -465,54 +573,83 @@ function Home() {
                             </select>
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
-
-                        {/* Price Range */}
-                        <div className="bg-background border-2 border-border rounded-lg px-4 py-3">
-                            <div className="flex items-center justify-between mb-2">
+                        <div className="bg-background border-2 border-border rounded-lg px-4 py-4">
+                            <div className="flex items-center justify-between mb-4">
                                 <span className="text-sm font-medium text-foreground">
                                     Price Range
                                 </span>
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs text-muted-foreground font-medium px-2 py-1 bg-muted rounded">
                                     ₱{priceRange[0]} - ₱{priceRange[1]}
                                 </span>
                             </div>
-                            <div className="space-y-2">
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max={maxPrice}
-                                    value={priceRange[0]}
-                                    onChange={(e) =>
-                                        setPriceRange([
-                                            Number(e.target.value),
-                                            priceRange[1],
-                                        ])
-                                    }
-                                    className="w-full h-2 bg-border rounded-lg appearance-none cursor-pointer"
-                                    style={{
-                                        accentColor: "#FFAB00",
-                                    }}
-                                />
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max={maxPrice}
-                                    value={priceRange[1]}
-                                    onChange={(e) =>
-                                        setPriceRange([
-                                            priceRange[0],
-                                            Number(e.target.value),
-                                        ])
-                                    }
-                                    className="w-full h-2 bg-border rounded-lg appearance-none cursor-pointer"
-                                    style={{
-                                        accentColor: "#FFAB00",
-                                    }}
-                                />
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-medium text-muted-foreground mb-2">
+                                        Minimum Price
+                                    </label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                            ₱
+                                        </span>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={priceRange[0] || ""}
+                                            onChange={(e) => {
+                                                const value = Math.max(
+                                                    0,
+                                                    Number(e.target.value) || 0
+                                                );
+                                                if (
+                                                    priceRange[1] > 0 &&
+                                                    value > priceRange[1]
+                                                ) {
+                                                    setPriceRange([
+                                                        priceRange[1],
+                                                        priceRange[1],
+                                                    ]);
+                                                } else {
+                                                    setPriceRange([
+                                                        value,
+                                                        priceRange[1],
+                                                    ]);
+                                                }
+                                            }}
+                                            className="w-full pl-7 pr-3 py-3 text-sm bg-white border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-[#FFAB00] transition-all"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-muted-foreground mb-2">
+                                        Maximum Price
+                                    </label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                            ₱
+                                        </span>
+                                        <input
+                                            type="number"
+                                            min={priceRange[0]}
+                                            value={priceRange[1] || ""}
+                                            onChange={(e) => {
+                                                const value = Math.max(
+                                                    priceRange[0],
+                                                    Number(e.target.value) || 0
+                                                );
+                                                setPriceRange([
+                                                    priceRange[0],
+                                                    value,
+                                                ]);
+                                            }}
+                                            className="w-full pl-7 pr-3 py-3 text-sm bg-white border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFAB00] focus:border-[#FFAB00] transition-all"
+                                            placeholder="Any amount"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
-
-                        {/* Clear Filters Button */}
                         {hasActiveFilters && (
                             <button
                                 onClick={clearFilters}
@@ -527,9 +664,24 @@ function Home() {
 
             {/* Main Content Area */}
             <div className="px-4 md:px-8 lg:px-16 xl:px-24 mt-8">
+                {/* Recommendations Section */}
+                {recommendations.length > 0 && (
+                    <RecommendationsSection
+                        recommendations={recommendations}
+                        loading={recsLoading}
+                        userProfile={userProfile}
+                        user={user}
+                        isFavorited={isFavorited}
+                        toggleFavorite={handleToggleFavorite}
+                        onItemClick={handleItemClick}
+                        onMessageOwner={handleMessageOwner}
+                    />
+                )}
+
+                {/* All Items Section */}
                 <div className="flex items-center justify-between mb-6">
                     <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
-                        Available Items
+                        {recommendations.length > 0 ? 'All Items' : 'Available Items'}
                     </h1>
                     <span className="text-sm text-muted-foreground">
                         {filteredItems.length}{" "}
@@ -585,26 +737,11 @@ function Home() {
                                     imageUrl={item.imageUrl}
                                     isOwner={user?.id === item.ownerId}
                                     isFavorited={isFavorited(item.raw?.item_id)}
-                                    onHeartClick={() =>
-                                        toggleFavorite(item.raw || item)
-                                    }
-                                    onRentClick={() => {
-                                        setSelectedItem(item.raw || item);
-                                        setBookOpen(true);
-                                    }}
+                                    onHeartClick={() => handleToggleFavorite(item.raw || item)}
+                                    onRentClick={() => handleItemClick(item)}
                                     onMessageOwner={
                                         user?.id !== item.ownerId
-                                            ? () => {
-                                                  const params =
-                                                      new URLSearchParams({
-                                                          to: item.ownerId,
-                                                          item:
-                                                              item.raw
-                                                                  ?.item_id ||
-                                                              item.item_id,
-                                                      });
-                                                  window.location.href = `/inbox?${params.toString()}`;
-                                              }
+                                            ? () => handleMessageOwner(item)
                                             : undefined
                                     }
                                 />
