@@ -34,6 +34,8 @@ import Loading from "./components/Loading.jsx";
 import PendingVerification from "./pages/PendingVerification.jsx";
 import Chat from "./components/Chat.jsx";
 import TotalUser from "./pages/admin/pages/TotalUsers.jsx";
+import TotalItems from "./pages/admin/pages/TotalItems.jsx";
+import ReReviewQueue from "./pages/admin/pages/ReReviewQueue.jsx";
 import ForgotPassword from "./pages/admin/pages/ForgotPassword.jsx";
 
 import Banned from "./pages/Banned";
@@ -81,7 +83,10 @@ export default function App() {
                             path="/pending-verification"
                             element={<PendingVerification />}
                         />
-                        <Route path="/forgot-password" element={<ForgotPassword />} />
+                        <Route
+                            path="/forgot-password"
+                            element={<ForgotPassword />}
+                        />
                         {/* User group */}
                         <Route
                             element={
@@ -143,8 +148,18 @@ export default function App() {
                                 path="/reported-items"
                                 element={<ReportedItems />}
                             />
-                            <Route path="/total-users" element={<TotalUser />} />
-                            
+                            <Route
+                                path="/total-users"
+                                element={<TotalUser />}
+                            />
+                            <Route
+                                path="/total-items"
+                                element={<TotalItems />}
+                            />
+                            <Route
+                                path="/rereview-requests"
+                                element={<ReReviewQueue />}
+                            />
                         </Route>
                         <Route path="/banned" element={<Banned />} />
                         {/** Pending Bookings route hidden per product change (handled by lessors) **/}

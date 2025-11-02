@@ -119,6 +119,16 @@ export const NOTIFICATION_TEMPLATES = {
         type: NOTIFICATION_TYPES.ITEM,
     }),
 
+    // Item banned after admin confirmation of a report
+    ITEM_BANNED_BY_ADMIN: (itemTitle, details = "") => ({
+        title: "🚫 Item Banned",
+        message: `Your item "${itemTitle}" has been banned by an admin after careful consideration of a report${
+            details ? `: ${details}` : ""
+        }.
+        `,
+        type: NOTIFICATION_TYPES.ITEM,
+    }),
+
     // Comprehensive reminders and process notifications
     DEPOSIT_REMINDER: (itemTitle, hoursLeft) => ({
         title: "Upload Deposit Proof",

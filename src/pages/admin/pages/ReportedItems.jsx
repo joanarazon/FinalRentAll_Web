@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useToastApi } from "@/components/ui/toast";
+import { handleItemBanned } from "@/lib/notificationEvents";
 
 export default function ReportedItems() {
     const admin = useUser();
@@ -79,6 +80,30 @@ export default function ReportedItems() {
         fetchData();
     }, [fetchData]);
 
+    // Real-time: refetch when complaints (or related items) change
+    useEffect(() => {
+        const channel = supabase
+            .channel("reported_items_changes")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "complaints" },
+                () => queueMicrotask(() => fetchData())
+            )
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "items" },
+                () => queueMicrotask(() => fetchData())
+            )
+            .subscribe();
+
+        return () => {
+            try {
+                supabase.removeChannel(channel);
+            } catch (_) {}
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const handleActionWithNote = (
         action,
         complaintId,
@@ -118,6 +143,85 @@ export default function ReportedItems() {
                     }
                 );
                 if (warnErr) throw warnErr;
+
+                // Record a curated violation entry for owner-visible history and admin aggregates
+                try {
+                    // Try to capture the complaint reason for context
+                    let reportReason = null;
+                    const { data: compRow } = await supabase
+                        .from("complaints")
+                        .select("reason")
+                        .eq("complaint_id", noteDialog.complaintId)
+                        .maybeSingle();
+                    if (compRow?.reason) reportReason = compRow.reason;
+
+                    const violationReason =
+                        noteDialog.warningAmount >= 3
+                            ? "major violation"
+                            : "minor violation";
+                    const detailsParts = [];
+                    if (reportReason)
+                        detailsParts.push(`report reason: ${reportReason}`);
+                    if (resolutionNote?.trim())
+                        detailsParts.push(
+                            `admin note: ${resolutionNote.trim()}`
+                        );
+                    const details = detailsParts.join(" | ") || null;
+
+                    const { error: vioErr } = await supabase
+                        .from("item_violations")
+                        .insert({
+                            item_id: noteDialog.itemId,
+                            reported_by: admin.id,
+                            reason: violationReason,
+                            details,
+                        });
+                    if (vioErr) console.warn("Violation insert failed", vioErr);
+                } catch (vioCatch) {
+                    console.warn("Failed to record violation entry", vioCatch);
+                }
+
+                // Notify the owner that the item has been banned
+                try {
+                    const { data: itemRow } = await supabase
+                        .from("items")
+                        .select("item_id,title,user_id")
+                        .eq("item_id", noteDialog.itemId)
+                        .single();
+                    if (itemRow) {
+                        const detailsParts = [];
+                        // Include admin's resolution note and/or complaint reason if available
+                        if (resolutionNote?.trim())
+                            detailsParts.push(
+                                `admin note: ${resolutionNote.trim()}`
+                            );
+                        // Note: reportReason captured above in the same scope
+                        // but ensure we include it again for the notification body
+                        try {
+                            const { data: compRow2 } = await supabase
+                                .from("complaints")
+                                .select("reason")
+                                .eq("complaint_id", noteDialog.complaintId)
+                                .maybeSingle();
+                            if (compRow2?.reason)
+                                detailsParts.unshift(
+                                    `report reason: ${compRow2.reason}`
+                                );
+                        } catch {}
+
+                        const details = detailsParts.join(" | ");
+                        await handleItemBanned(
+                            { item_id: itemRow.item_id, title: itemRow.title },
+                            itemRow.user_id,
+                            details
+                        );
+                    }
+                } catch (notifyErr) {
+                    console.warn(
+                        "Failed to send item banned notification",
+                        notifyErr
+                    );
+                }
             }
 
             // 2️⃣ Update the complaint with resolution info

@@ -133,11 +133,21 @@ export default function OwnerBookingRequests({
     const [proofSrc, setProofSrc] = useState(null);
     const [proofTitle, setProofTitle] = useState("");
     const [activeTab, setActiveTab] = useState("pending");
+    const [ownerItemIds, setOwnerItemIds] = useState([]);
 
     const fetchData = useCallback(async () => {
         if (!user?.id) return;
         setLoading(true);
         try {
+            // Refresh owner's item ids (for realtime filtering if needed)
+            try {
+                const { data: ownerItems } = await supabase
+                    .from("items")
+                    .select("item_id")
+                    .eq("user_id", user.id);
+                setOwnerItemIds((ownerItems || []).map((i) => i.item_id));
+            } catch (_) {}
+
             const { data, error } = await supabase
                 .from("rental_transactions")
                 .select(
@@ -279,6 +289,36 @@ export default function OwnerBookingRequests({
         fetchData();
     }, [fetchData]);
 
+    // Realtime: refetch when owner's rental transactions change
+    useEffect(() => {
+        if (!user?.id) return;
+        // Build an 'in' filter for item_ids owned by this user (fallback to no filter if empty)
+        const ids = (ownerItemIds || [])
+            .map((id) => String(id))
+            .filter(Boolean);
+        const filter = ids.length ? `item_id=in.(${ids.join(",")})` : undefined;
+
+        const channel = supabase
+            .channel(`owner_rentals_${user.id}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "rental_transactions",
+                    ...(filter ? { filter } : {}),
+                },
+                () => queueMicrotask(() => fetchData())
+            )
+            .subscribe();
+
+        return () => {
+            try {
+                supabase.removeChannel(channel);
+            } catch (_) {}
+        };
+    }, [user?.id, ownerItemIds.join(","), fetchData]);
+
     const approve = async (txId) => {
         setActionId(txId);
         try {
@@ -327,14 +367,17 @@ export default function OwnerBookingRequests({
                         "Booking Confirmed!",
                         `${ownerName} has confirmed your booking for "${bookingBefore.items.title}". Please submit your deposit.`,
                         {
-                            type: 'booking_confirmed',
+                            type: "booking_confirmed",
                             rental_id: bookingBefore.rental_id,
-                            item_id: bookingBefore.item_id
+                            item_id: bookingBefore.item_id,
                         }
                     );
-                    console.log('✅ FCM notification sent to renter');
+                    console.log("✅ FCM notification sent to renter");
                 } catch (notificationError) {
-                    console.error('Failed to send FCM notification:', notificationError);
+                    console.error(
+                        "Failed to send FCM notification:",
+                        notificationError
+                    );
                 }
 
                 // 2️⃣ Send in-app notification to web renter (handleBookingStatusChange)
@@ -349,7 +392,7 @@ export default function OwnerBookingRequests({
                             owner: { full_name: ownerName },
                         }
                     );
-                    console.log('✅ In-app notification sent to renter');
+                    console.log("✅ In-app notification sent to renter");
                 } catch (notificationError) {
                     console.error(
                         "Failed to send in-app notification:",
@@ -392,7 +435,9 @@ export default function OwnerBookingRequests({
                 .eq("status", "awaiting_owner_confirmation");
 
             if (error) {
-                toast.error(`Confirm return failed: ${error.message || "Unknown error"}`);
+                toast.error(
+                    `Confirm return failed: ${error.message || "Unknown error"}`
+                );
                 throw error;
             } else {
                 toast.success("Return confirmed. Rental completed.");
@@ -409,13 +454,16 @@ export default function OwnerBookingRequests({
                         "Rental Completed!",
                         `${ownerName} has confirmed your return. Your rental is complete!`,
                         {
-                            type: 'booking_completed',
+                            type: "booking_completed",
                             rental_id: bookingBefore.rental_id,
-                            item_id: bookingBefore.item_id
+                            item_id: bookingBefore.item_id,
                         }
                     );
                 } catch (notificationError) {
-                    console.error('Failed to send FCM notification:', notificationError);
+                    console.error(
+                        "Failed to send FCM notification:",
+                        notificationError
+                    );
                 }
                 try {
                     const ownerName =
@@ -524,7 +572,9 @@ export default function OwnerBookingRequests({
                 .eq("status", "pending");
 
             if (error) {
-                toast.error(`Reject failed: ${error.message || "Unknown error"}`);
+                toast.error(
+                    `Reject failed: ${error.message || "Unknown error"}`
+                );
                 throw error;
             } else {
                 toast.success("Request rejected");
@@ -541,13 +591,16 @@ export default function OwnerBookingRequests({
                         "Booking Rejected",
                         `${ownerName} has rejected your booking request for "${bookingBefore.items.title}".`,
                         {
-                            type: 'booking_rejected',
+                            type: "booking_rejected",
                             rental_id: bookingBefore.rental_id,
-                            item_id: bookingBefore.item_id
+                            item_id: bookingBefore.item_id,
                         }
                     );
                 } catch (notificationError) {
-                    console.error('Failed to send FCM notification:', notificationError);
+                    console.error(
+                        "Failed to send FCM notification:",
+                        notificationError
+                    );
                 }
 
                 // 2️⃣ Send in-app notification to web
@@ -563,7 +616,10 @@ export default function OwnerBookingRequests({
                         }
                     );
                 } catch (notificationError) {
-                    console.error('Failed to send in-app notification:', notificationError);
+                    console.error(
+                        "Failed to send in-app notification:",
+                        notificationError
+                    );
                 }
             }
         } catch (e) {
@@ -598,7 +654,9 @@ export default function OwnerBookingRequests({
                 .eq("status", "deposit_submitted");
 
             if (error) {
-                toast.error(`Verify failed: ${error.message || "Unknown error"}`);
+                toast.error(
+                    `Verify failed: ${error.message || "Unknown error"}`
+                );
                 throw error;
             } else {
                 toast.success("Deposit verified. Marked as On the Way.");
@@ -615,13 +673,16 @@ export default function OwnerBookingRequests({
                         "Deposit Verified - On The Way",
                         `${ownerName} has verified your deposit. "${bookingBefore.items.title}" is on the way!`,
                         {
-                            type: 'on_the_way',
+                            type: "on_the_way",
                             rental_id: bookingBefore.rental_id,
-                            item_id: bookingBefore.item_id
+                            item_id: bookingBefore.item_id,
                         }
                     );
                 } catch (notificationError) {
-                    console.error('Failed to send FCM notification:', notificationError);
+                    console.error(
+                        "Failed to send FCM notification:",
+                        notificationError
+                    );
                 }
                 try {
                     const ownerName =
@@ -708,8 +769,9 @@ export default function OwnerBookingRequests({
         currentData = currentData.filter((booking) => {
             const itemTitle = booking.items?.title || booking.item?.title || "";
             const renterName = booking.renter
-                ? `${booking.renter.first_name || ""} ${booking.renter.last_name || ""
-                    }`.trim()
+                ? `${booking.renter.first_name || ""} ${
+                      booking.renter.last_name || ""
+                  }`.trim()
                 : "";
             const status = booking.status || "";
 
@@ -767,19 +829,21 @@ export default function OwnerBookingRequests({
                                 <button
                                     key={tab.key}
                                     onClick={() => setActiveTab(tab.key)}
-                                    className={`group relative flex items-center gap-2.5 px-5 py-3 rounded-xl font-semibold text-sm whitespace-nowrap transition-all duration-300 ${isActive
-                                        ? "bg-gradient-to-r from-[#FFAB00] to-[#FFAB00]/90 text-[#1E1E1E] shadow-lg shadow-[#FFAB00]/30 scale-105"
-                                        : "bg-transparent text-[#1E1E1E]/60 hover:bg-[#FAF5EF] hover:text-[#1E1E1E] hover:scale-102"
-                                        }`}
+                                    className={`group relative flex items-center gap-2.5 px-5 py-3 rounded-xl font-semibold text-sm whitespace-nowrap transition-all duration-300 ${
+                                        isActive
+                                            ? "bg-gradient-to-r from-[#FFAB00] to-[#FFAB00]/90 text-[#1E1E1E] shadow-lg shadow-[#FFAB00]/30 scale-105"
+                                            : "bg-transparent text-[#1E1E1E]/60 hover:bg-[#FAF5EF] hover:text-[#1E1E1E] hover:scale-102"
+                                    }`}
                                 >
                                     <span className="relative z-10">
                                         {tab.label}
                                     </span>
                                     <Badge
-                                        className={`relative z-10 ${isActive
-                                            ? "bg-[#1E1E1E] text-white shadow-md"
-                                            : "bg-[#1E1E1E]/10 text-[#1E1E1E]/70 group-hover:bg-[#FFAB00]/20"
-                                            } border-none font-bold px-2.5 py-0.5 text-xs transition-all`}
+                                        className={`relative z-10 ${
+                                            isActive
+                                                ? "bg-[#1E1E1E] text-white shadow-md"
+                                                : "bg-[#1E1E1E]/10 text-[#1E1E1E]/70 group-hover:bg-[#FFAB00]/20"
+                                        } border-none font-bold px-2.5 py-0.5 text-xs transition-all`}
                                     >
                                         {count}
                                     </Badge>
@@ -1347,8 +1411,8 @@ function RequestDetailsDialog({ row, awaiting = false }) {
                                 <span className="text-[#1E1E1E] font-semibold text-xs">
                                     {row.renter_return_marked_at
                                         ? new Date(
-                                            row.renter_return_marked_at
-                                        ).toLocaleString()
+                                              row.renter_return_marked_at
+                                          ).toLocaleString()
                                         : "—"}
                                 </span>
                             </div>
@@ -1359,8 +1423,8 @@ function RequestDetailsDialog({ row, awaiting = false }) {
                                 <span className="text-[#1E1E1E] font-semibold text-xs">
                                     {row.owner_confirmed_at
                                         ? new Date(
-                                            row.owner_confirmed_at
-                                        ).toLocaleString()
+                                              row.owner_confirmed_at
+                                          ).toLocaleString()
                                         : "—"}
                                 </span>
                             </div>

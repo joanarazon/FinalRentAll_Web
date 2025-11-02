@@ -280,6 +280,23 @@ export const handleItemRejected = async (
     }
 };
 
+// When item is banned by admin after report confirmation
+export const handleItemBanned = async (item, userId, details = "") => {
+    try {
+        const template = NOTIFICATION_TEMPLATES.ITEM_BANNED_BY_ADMIN(
+            item.title,
+            details
+        );
+        await createNotification({
+            userId,
+            ...template,
+            itemId: item.item_id,
+        });
+    } catch (error) {
+        console.error("Failed to send item banned notification:", error);
+    }
+};
+
 // When item is flagged for review (e.g., reported by users)
 export const handleItemFlaggedForReview = async (
     item,

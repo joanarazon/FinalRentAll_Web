@@ -676,6 +676,15 @@ function OwnedItemsGrid({ items, isOwner, onChanged, onRent }) {
                                     : "Rent Now"}
                             </Button>
                         )}
+                        {isOwner && it.item_status === "banned" && (
+                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <ReReviewButton
+                                    itemId={it.item_id}
+                                    onRequested={onChanged}
+                                />
+                                <ViolationHistoryButton itemId={it.item_id} />
+                            </div>
+                        )}
                     </div>
                 </div>
             ))}
@@ -934,5 +943,161 @@ function EditItemModal({ open, onOpenChange, item, onSaved }) {
                 </div>
             </DialogContent>
         </Dialog>
+    );
+}
+
+function ReReviewButton({ itemId, onRequested }) {
+    const { user } = useUserContext();
+    const [loading, setLoading] = useState(true);
+    const [pending, setPending] = useState(false);
+    const toast = useToastApi();
+
+    useEffect(() => {
+        let cancelled = false;
+        const load = async () => {
+            try {
+                setLoading(true);
+                const { data, error } = await supabase
+                    .from("item_rereview_requests")
+                    .select("status")
+                    .eq("item_id", itemId)
+                    .eq("status", "pending")
+                    .maybeSingle();
+                if (error && error.code !== "PGRST116") throw error;
+                if (!cancelled) setPending(!!data);
+            } catch (e) {
+                console.warn("Check re-review failed", e);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, [itemId]);
+
+    const request = async () => {
+        try {
+            setLoading(true);
+            if (!user?.id) {
+                throw new Error("You must be signed in to request re-review.");
+            }
+            const { error } = await supabase
+                .from("item_rereview_requests")
+                .insert({ item_id: itemId, requested_by: user.id });
+            if (error) throw error;
+            toast.success("Re-review requested");
+            setPending(true);
+            onRequested?.();
+        } catch (e) {
+            const msg = /uq_item_pending_rereview/i.test(e?.message || "")
+                ? "There's already a pending re-review for this item."
+                : e.message || "Request failed";
+            toast.error(msg);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Button
+            className={`w-full font-medium ${
+                pending
+                    ? "bg-gray-200 text-gray-600"
+                    : "bg-[#FFAB00] hover:bg-[#FFAB00]/90 text-[#1E1E1E]"
+            }`}
+            disabled={loading || pending}
+            onClick={request}
+        >
+            {pending
+                ? "Re-review Pending"
+                : loading
+                ? "Checking..."
+                : "Request Re-review"}
+        </Button>
+    );
+}
+
+function ViolationHistoryButton({ itemId }) {
+    const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [rows, setRows] = useState([]);
+
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        const load = async () => {
+            try {
+                setLoading(true);
+                const { data, error } = await supabase
+                    .from("item_violations")
+                    .select("violation_id, reason, details, created_at")
+                    .eq("item_id", itemId)
+                    .order("created_at", { ascending: false });
+                if (error) throw error;
+                if (!cancelled) setRows(data || []);
+            } catch (e) {
+                console.error("Load violations failed", e);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, [open, itemId]);
+
+    return (
+        <>
+            <Button
+                variant="outline"
+                className="w-full border-[#1E1E1E]/20 bg-transparent"
+                onClick={() => setOpen(true)}
+            >
+                View Violation History
+            </Button>
+            {open && (
+                <Dialog open={open} onOpenChange={setOpen}>
+                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl font-bold text-[#1E1E1E]">
+                                Violation History
+                            </DialogTitle>
+                        </DialogHeader>
+                        {loading ? (
+                            <div className="text-sm text-gray-500">
+                                Loading…
+                            </div>
+                        ) : rows.length === 0 ? (
+                            <div className="text-sm text-gray-500">
+                                No violations recorded.
+                            </div>
+                        ) : (
+                            <ul className="divide-y">
+                                {rows.map((v) => (
+                                    <li key={v.violation_id} className="py-3">
+                                        <div className="text-sm font-medium text-[#1E1E1E]">
+                                            {v.reason}
+                                        </div>
+                                        {v.details && (
+                                            <div className="text-sm text-[#1E1E1E]/80 mt-1">
+                                                {v.details}
+                                            </div>
+                                        )}
+                                        <div className="text-xs text-[#1E1E1E]/50 mt-1">
+                                            {new Date(
+                                                v.created_at
+                                            ).toLocaleString()}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </DialogContent>
+                </Dialog>
+            )}
+        </>
     );
 }
