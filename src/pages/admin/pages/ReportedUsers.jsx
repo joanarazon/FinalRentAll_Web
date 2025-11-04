@@ -34,6 +34,9 @@ export default function ReportedUsers() {
     const [resolutionNote, setResolutionNote] = useState("");
     const [noteSubmitting, setNoteSubmitting] = useState(false);
     const [sendingNoticeId, setSendingNoticeId] = useState(null);
+    // track which complaints we've already notified in the UI so the Notify button
+    // becomes a non-clickable "Notified" label after sending
+    const [notifiedIds, setNotifiedIds] = useState(new Set());
 
     // Fetch reports from Supabase
     const fetchData = useCallback(async () => {
@@ -231,6 +234,12 @@ export default function ReportedUsers() {
             });
             if (error) throw error;
             toast.success("Notice sent to the reported user.");
+            // mark this complaint as notified in the UI so button changes to "Notified"
+            setNotifiedIds((prev) => {
+                const next = new Set(prev);
+                next.add(complaintId);
+                return next;
+            });
             // optional: refresh table to reflect any UI changes elsewhere
             fetchData();
         } catch (e) {
@@ -425,8 +434,13 @@ export default function ReportedUsers() {
                                                             size="sm"
                                                             variant="outline"
                                                             className="border-blue-400 text-blue-700 hover:bg-blue-50 cursor-pointer"
-                                                            disabled={sendingNoticeId === r.complaint_id}
+                                                            disabled={
+                                                                sendingNoticeId === r.complaint_id ||
+                                                                notifiedIds.has(r.complaint_id)
+                                                            }
                                                             onClick={() =>
+                                                                // guard in case someone somehow clicks while marked notified
+                                                                !notifiedIds.has(r.complaint_id) &&
                                                                 sendNotice(
                                                                     r.complaint_id,
                                                                     r.target_user_id,
@@ -438,6 +452,9 @@ export default function ReportedUsers() {
                                                         >
                                                             {sendingNoticeId === r.complaint_id ? (
                                                                 <Loader2 className="w-4 h-4 animate-spin" />
+                                                            ) : notifiedIds.has(r.complaint_id) ? (
+                                                                // show a non-clickable acknowledged state
+                                                                "Notified"
                                                             ) : (
                                                                 <>
                                                                     <Bell className="w-4 h-4 mr-1" /> Notify

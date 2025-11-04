@@ -45,6 +45,9 @@ export default function ReportedItems() {
     const [resolutionNote, setResolutionNote] = useState("");
     const [noteSubmitting, setNoteSubmitting] = useState(false);
     const [sendingNoticeId, setSendingNoticeId] = useState(null);
+    // track which complaints we've already notified in the UI so the Notify button
+    // becomes a non-clickable "Notified" label after sending
+    const [notifiedIds, setNotifiedIds] = useState(new Set());
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -165,6 +168,12 @@ export default function ReportedItems() {
             }
 
             toast.success("Owner notified about the report.");
+            // mark this complaint as notified in the UI so the Notify button becomes "Notified"
+            setNotifiedIds((prev) => {
+                const next = new Set(prev);
+                next.add(complaintId);
+                return next;
+            });
         } catch (err) {
             console.error("Failed to send item notice:", err);
             toast.error("Failed to notify owner.");
@@ -507,8 +516,12 @@ export default function ReportedItems() {
                                         size="sm"
                                         variant="outline"
                                         className="border-blue-400 text-blue-700 hover:bg-blue-50 cursor-pointer"
-                                        disabled={sendingNoticeId === r.complaint_id}
+                                        disabled={
+                                            sendingNoticeId === r.complaint_id ||
+                                            notifiedIds.has(r.complaint_id)
+                                        }
                                         onClick={() =>
+                                            !notifiedIds.has(r.complaint_id) &&
                                             sendNotice(
                                                 r.complaint_id,
                                                 r.target_item_id,
@@ -521,6 +534,8 @@ export default function ReportedItems() {
                                     >
                                         {sendingNoticeId === r.complaint_id ? (
                                             <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : notifiedIds.has(r.complaint_id) ? (
+                                            "Notified"
                                         ) : (
                                             <>
                                                 <Bell className="w-4 h-4 mr-1" /> Notify

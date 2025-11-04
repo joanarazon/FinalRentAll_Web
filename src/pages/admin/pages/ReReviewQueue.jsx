@@ -28,6 +28,13 @@ export default function ReReviewQueue() {
     const [actionRow, setActionRow] = useState(null);
     const [actionType, setActionType] = useState(null); // 'approve' | 'reject'
     const [adminNotes, setAdminNotes] = useState("");
+    const [imagePreview, setImagePreview] = useState(null);
+    // Filters
+    const [filterTitle, setFilterTitle] = useState("");
+    const [filterItemId, setFilterItemId] = useState("");
+    const [filterRequester, setFilterRequester] = useState("");
+    const [filterStatus, setFilterStatus] = useState("all");
+    const [filterDate, setFilterDate] = useState(null);
 
     const fetchQueue = async () => {
         setLoading(true);
@@ -38,7 +45,7 @@ export default function ReReviewQueue() {
                     `
                     request_id, item_id, requested_by, status, requested_at, admin_notes,
                     items:items!item_rereview_requests_item_id_fkey(
-                        title, user_id, item_status, created_at,
+                        title, user_id, item_status, created_at, main_image_url,
                         owner:users!items_user_id_fkey(first_name, last_name)
                     ),
                     requester:users!item_rereview_requests_requested_by_fkey(first_name, last_name)
@@ -46,7 +53,44 @@ export default function ReReviewQueue() {
                 )
                 .order("requested_at", { ascending: false });
             if (error) throw error;
-            setRows(data || []);
+
+            // If DB relationship isn't present, `items` subselect may be null.
+            // Fetch items explicitly and merge `main_image_url` so UI always has the image when available.
+            const itemIds = (data || []).map((d) => d.item_id).filter(Boolean);
+            if (itemIds.length > 0) {
+                try {
+                    const { data: itemsData, error: itemsErr } = await supabase
+                        .from("items")
+                        .select("item_id, title, main_image_url, user_id, item_status, created_at")
+                        .in("item_id", itemIds);
+
+                    if (!itemsErr && itemsData) {
+                        const merged = (data || []).map((row) => {
+                            const found = itemsData.find((i) => i.item_id === row.item_id);
+                            // Ensure row.items exists and merge fields from items table when missing
+                            const base = row.items || {};
+                            return {
+                                ...row,
+                                items: {
+                                    title: base.title || (found && found.title) || null,
+                                    user_id: base.user_id || (found && found.user_id) || null,
+                                    item_status: base.item_status || (found && found.item_status) || null,
+                                    created_at: base.created_at || (found && found.created_at) || null,
+                                    main_image_url: (base.main_image_url ?? (found && found.main_image_url)) || null,
+                                },
+                            };
+                        });
+                        setRows(merged);
+                    } else {
+                        setRows(data || []);
+                    }
+                } catch (e2) {
+                    console.warn("Failed to fetch items for merge", e2);
+                    setRows(data || []);
+                }
+            } else {
+                setRows(data || []);
+            }
         } catch (e) {
             console.error("Load queue failed", e);
             toast.error("Failed to load re-review queue");
@@ -89,6 +133,35 @@ export default function ReReviewQueue() {
         () => rows.filter((r) => r.status === "pending").length,
         [rows]
     );
+
+    // Filtered rows (client-side)
+    const filteredRows = useMemo(() => {
+        if (!rows || rows.length === 0) return [];
+        return rows.filter((r) => {
+            // Title
+            if (filterTitle && !String(r.items?.title || "").toLowerCase().includes(filterTitle.toLowerCase())) return false;
+            // Item ID
+            if (filterItemId && !String(r.item_id || "").toLowerCase().includes(filterItemId.toLowerCase())) return false;
+            // Requester (first + last)
+            const requesterName = ((r.requester?.first_name || "") + " " + (r.requester?.last_name || "")).trim();
+            if (filterRequester && !requesterName.toLowerCase().includes(filterRequester.toLowerCase())) return false;
+            // Status
+            if (filterStatus && filterStatus !== "all") {
+                if (String(r.status || "").toLowerCase() !== filterStatus.toLowerCase()) return false;
+            }
+            // Requested date (YYYY-MM-DD)
+            if (filterDate) {
+                try {
+                    const d = new Date(r.requested_at);
+                    const iso = d.toISOString().slice(0, 10);
+                    if (iso !== filterDate) return false;
+                } catch (e) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    }, [rows, filterTitle, filterItemId, filterRequester, filterStatus, filterDate]);
 
     const takeAction = async ({ row, approve, notes }) => {
         if (!user?.id) {
@@ -227,6 +300,84 @@ export default function ReReviewQueue() {
                     </div>
                 </div>
 
+                {/* Filters (card) */}
+                <div className="mb-6">
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                            <div>
+                                <label className="text-xs text-gray-600">Title</label>
+                                <input
+                                    value={filterTitle}
+                                    onChange={(e) => setFilterTitle(e.target.value)}
+                                    placeholder="Search title"
+                                    className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-xs text-gray-600">Item ID</label>
+                                <input
+                                    value={filterItemId}
+                                    onChange={(e) => setFilterItemId(e.target.value)}
+                                    placeholder="Item ID"
+                                    className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-xs text-gray-600">Requester</label>
+                                <input
+                                    value={filterRequester}
+                                    onChange={(e) => setFilterRequester(e.target.value)}
+                                    placeholder="Requester name"
+                                    className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-xs text-gray-600">Status</label>
+                                <select
+                                    value={filterStatus}
+                                    onChange={(e) => setFilterStatus(e.target.value)}
+                                    className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm bg-white"
+                                >
+                                    <option value="all">All</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="rejected">Rejected</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <div className="w-full">
+                                    <label className="text-xs text-gray-600">Requested Date</label>
+                                    <input
+                                        type="date"
+                                        value={filterDate || ""}
+                                        onChange={(e) => setFilterDate(e.target.value || null)}
+                                        className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <button
+                                        onClick={() => {
+                                            setFilterTitle("");
+                                            setFilterItemId("");
+                                            setFilterRequester("");
+                                            setFilterStatus("all");
+                                            setFilterDate(null);
+                                        }}
+                                        className="ml-2 inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
@@ -234,9 +385,6 @@ export default function ReReviewQueue() {
                                 <tr className="border-b bg-gray-50">
                                     <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                         Item
-                                    </th>
-                                    <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Owner
                                     </th>
                                     <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                         Requested By
@@ -256,7 +404,7 @@ export default function ReReviewQueue() {
                                 {loading && (
                                     <tr>
                                         <td
-                                            colSpan={6}
+                                            colSpan={5}
                                             className="p-8 text-center text-gray-500"
                                         >
                                             <div className="flex items-center justify-center gap-2">
@@ -266,10 +414,10 @@ export default function ReReviewQueue() {
                                         </td>
                                     </tr>
                                 )}
-                                {!loading && rows.length === 0 && (
+                                {!loading && filteredRows.length === 0 && (
                                     <tr>
                                         <td
-                                            colSpan={6}
+                                            colSpan={5}
                                             className="p-8 text-center text-gray-500"
                                         >
                                             No requests
@@ -277,31 +425,47 @@ export default function ReReviewQueue() {
                                     </tr>
                                 )}
                                 {!loading &&
-                                    rows.map((r) => (
+                                    filteredRows.map((r) => (
                                         <tr
                                             key={r.request_id}
                                             className="border-b hover:bg-orange-50/30"
                                         >
                                             <td className="p-4">
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium text-gray-900 line-clamp-1">
-                                                        {r.items?.title ||
-                                                            "Item"}
-                                                    </span>
-                                                    <span className="text-xs text-amber-700 font-mono">
-                                                        {r.item_id}
-                                                    </span>
+                                                <div className="flex items-center gap-3">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (r.items?.main_image_url) setImagePreview(r.items.main_image_url);
+                                                            else setViewItem(r);
+                                                        }}
+                                                        className="w-12 h-12 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200 p-0"
+                                                        title={r.items?.main_image_url ? 'Open image preview' : 'View details'}
+                                                        aria-label={r.items?.main_image_url ? `Open image for ${r.items?.title || r.item_id}` : `View details for ${r.items?.title || r.item_id}`}
+                                                    >
+                                                        {r.items?.main_image_url ? (
+                                                            <img
+                                                                src={r.items.main_image_url}
+                                                                alt={r.items?.title || 'Item image'}
+                                                                className="w-full h-full object-cover"
+                                                                loading="lazy"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+                                                                No Image
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium text-gray-900 line-clamp-1">
+                                                            {r.items?.title || 'Item'}
+                                                        </span>
+                                                        <span className="text-xs text-amber-700 font-mono">
+                                                            {r.item_id}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </td>
-                                            <td className="p-4">
-                                                <div className="text-sm text-gray-800">
-                                                    {(r.owner?.first_name ||
-                                                        "") +
-                                                        " " +
-                                                        (r.owner?.last_name ||
-                                                            "")}
-                                                </div>
-                                            </td>
+                                            {/* Owner column removed as requested */}
                                             <td className="p-4">
                                                 <div className="text-sm text-gray-800">
                                                     {(r.requester?.first_name ||
@@ -400,7 +564,21 @@ export default function ReReviewQueue() {
                     </div>
                 </div>
 
-                {viewItem && (
+                    {imagePreview && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/60" onClick={() => setImagePreview(null)} />
+                            <div className="relative z-10 max-w-[90vw] max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+                                <div className="p-3 border-b flex justify-end">
+                                    <Button variant="ghost" onClick={() => setImagePreview(null)}>Close</Button>
+                                </div>
+                                <div className="p-4 flex items-center justify-center bg-black">
+                                    <img src={imagePreview} alt="Preview" className="max-w-full max-h-[80vh] object-contain" />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {viewItem && (
                     <RequestDetailsDialog
                         row={viewItem}
                         onClose={() => setViewItem(null)}
@@ -485,10 +663,6 @@ function RequestDetailsDialog({ row, onClose }) {
                             </span>
                         </div>
                         <div className="text-sm text-gray-700">
-                            <span className="font-medium">Owner:</span>{" "}
-                            {(row.owner?.first_name || "") +
-                                " " +
-                                (row.owner?.last_name || "")}
                         </div>
                         <div className="text-sm text-gray-700">
                             <span className="font-medium">Requested by:</span>{" "}

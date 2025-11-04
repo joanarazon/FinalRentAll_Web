@@ -15,24 +15,45 @@ import {
 export default function TotalItems() {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
+    // Filters
+    const [filterTitle, setFilterTitle] = useState("");
+    const [filterOwnerId, setFilterOwnerId] = useState("");
+    const [filterStatus, setFilterStatus] = useState("all");
+    const [filterDate, setFilterDate] = useState(null);
 
     const fetchItems = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
+            // Fetch images from items table
+            const { data: itemsData, error: itemsError } = await supabase
+                .from("items")
+                .select("item_id, main_image_url");
+
+            if (itemsError) throw itemsError;
+
+            // Fetch metadata from the view
+            const { data: totalItems, error: totalError } = await supabase
                 .from("view_total_items")
-                .select(
-                    "item_id,user_id,title,created_at,item_status,quantity,violations_count,rereview_pending,last_violation_at"
-                )
+                .select("item_id,user_id,title,created_at,item_status,quantity,violations_count,rereview_pending,last_violation_at")
                 .order("created_at", { ascending: false });
-            if (error) throw error;
-            setRows(data || []);
+
+            if (totalError) throw totalError;
+
+            // Merge images with totalItems
+            const merged = totalItems.map((item) => {
+                const found = itemsData.find((i) => i.item_id === item.item_id);
+                return { ...item, main_image_url: found?.main_image_url || null };
+            });
+
+            // ✅ update state with merged result
+            setRows(merged);
         } catch (e) {
             console.error("Load items failed", e);
         } finally {
             setLoading(false);
         }
     };
+
 
     useEffect(() => {
         fetchItems();
@@ -66,7 +87,7 @@ export default function TotalItems() {
         return () => {
             try {
                 supabase.removeChannel(channel);
-            } catch (_) {}
+            } catch (_) { }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -77,6 +98,37 @@ export default function TotalItems() {
         const pendingRereview = rows.filter((r) => r.rereview_pending).length;
         return { total, banned, pendingRereview };
     }, [rows]);
+
+    // Filtered rows for table display
+    const filteredRows = useMemo(() => {
+        if (!rows || rows.length === 0) return [];
+
+        return rows.filter((r) => {
+            // Title filter (contains, case-insensitive)
+            if (filterTitle && !String(r.title || "").toLowerCase().includes(filterTitle.toLowerCase())) return false;
+
+            // Owner ID filter (contains)
+            if (filterOwnerId && !String(r.user_id || "").toLowerCase().includes(filterOwnerId.toLowerCase())) return false;
+
+            // Status filter (exact match)
+            if (filterStatus && filterStatus !== "all") {
+                if (String(r.item_status || "").toLowerCase() !== filterStatus.toLowerCase()) return false;
+            }
+
+            // Created date filter (compare YYYY-MM-DD)
+            if (filterDate) {
+                try {
+                    const d = new Date(r.created_at);
+                    const iso = d.toISOString().slice(0, 10);
+                    if (iso !== filterDate) return false;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+    }, [rows, filterTitle, filterOwnerId, filterStatus, filterDate]);
 
     const fmt = (d) => (d ? new Date(d).toLocaleString() : "—");
 
@@ -146,6 +198,73 @@ export default function TotalItems() {
                     </div>
                 </div>
 
+                {/* Filters (card container to match TotalUsers style) */}
+                <div className="mb-6">
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                            <div>
+                                <label className="text-xs text-gray-600">Title</label>
+                                <input
+                                    value={filterTitle}
+                                    onChange={(e) => setFilterTitle(e.target.value)}
+                                    placeholder="Search title"
+                                    className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-xs text-gray-600">Owner ID</label>
+                                <input
+                                    value={filterOwnerId}
+                                    onChange={(e) => setFilterOwnerId(e.target.value)}
+                                    placeholder="User ID"
+                                    className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-xs text-gray-600">Status</label>
+                                <select
+                                    value={filterStatus}
+                                    onChange={(e) => setFilterStatus(e.target.value)}
+                                    className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm bg-white"
+                                >
+                                    <option value="all">All</option>
+                                    <option value="pending">Under Review</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="banned">Banned</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <div className="w-full">
+                                    <label className="text-xs text-gray-600">Created Date</label>
+                                    <input
+                                        type="date"
+                                        value={filterDate || ""}
+                                        onChange={(e) => setFilterDate(e.target.value || null)}
+                                        className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <button
+                                        onClick={() => {
+                                            setFilterTitle("");
+                                            setFilterOwnerId("");
+                                            setFilterStatus("all");
+                                            setFilterDate(null);
+                                        }}
+                                        className="ml-2 inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div className="bg-white rounded-xl p-4 border border-gray-200">
@@ -178,7 +297,7 @@ export default function TotalItems() {
                             <span className="text-sm text-gray-700">
                                 {loading
                                     ? "Loading..."
-                                    : `${rows.length} items`}
+                                    : `${filteredRows.length} of ${rows.length} items`}
                             </span>
                         </div>
                     </div>
@@ -208,6 +327,9 @@ export default function TotalItems() {
                                     <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                         Last Violation
                                     </th>
+                                    <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                        Item Image
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -224,7 +346,7 @@ export default function TotalItems() {
                                         </td>
                                     </tr>
                                 )}
-                                {!loading && rows.length === 0 && (
+                                {!loading && filteredRows.length === 0 && (
                                     <tr>
                                         <td
                                             colSpan={7}
@@ -238,7 +360,7 @@ export default function TotalItems() {
                                     </tr>
                                 )}
                                 {!loading &&
-                                    rows.map((r) => (
+                                    filteredRows.map((r) => (
                                         <tr
                                             key={r.item_id}
                                             className="border-b hover:bg-orange-50/30"
@@ -284,6 +406,19 @@ export default function TotalItems() {
                                                     <CalendarIcon className="w-4 h-4 text-gray-400" />
                                                     {fmt(r.last_violation_at)}
                                                 </div>
+                                            </td>
+                                            <td className="p-4">
+                                                {r.main_image_url ? (
+                                                    <a href={r.main_image_url} target="_blank" rel="noopener noreferrer">
+                                                        <img
+                                                            src={r.main_image_url}
+                                                            alt={r.title}
+                                                            className="w-12 h-12 object-cover rounded-md border border-gray-200 hover:scale-105 transition-transform"
+                                                        />
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-gray-400 text-sm">No Image</span>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}

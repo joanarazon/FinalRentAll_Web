@@ -46,26 +46,42 @@ export default function TotalUser() {
         const start = performance.now();
         try {
             setLoading(true);
-            const { data, error: fetchErr } = await supabase
+
+            // 1️⃣ Fetch from view_total_users
+            const { data: viewData, error: viewErr } = await supabase
                 .from("view_total_users")
                 .select(
                     "user_id, first_name, last_name, created_at, face_verified, role, warnings_count, total_item_violations, dob"
                 )
                 .order("created_at", { ascending: false });
-            if (fetchErr) throw fetchErr;
-            // Adapt view fields to previous structure keys for minimal code changes
-            const normalized = (data || []).map((u) => ({
-                id: u.user_id,
-                first_name: u.first_name,
-                last_name: u.last_name,
-                created_at: u.created_at,
-                face_verified: u.face_verified,
-                role: u.role,
-                warnings_count: u.warnings_count,
-                total_item_violations: u.total_item_violations,
-                dob: u.dob,
-                id_image_url: null,
-            }));
+
+            if (viewErr) throw viewErr;
+
+            // 2️⃣ Fetch from users table (for ID + Face)
+            const { data: userData, error: userErr } = await supabase
+                .from("users")
+                .select("id, id_image_url, face_image_url");
+
+            if (userErr) throw userErr;
+
+            // 3️⃣ Merge both datasets
+            const normalized = (viewData || []).map((u) => {
+                const match = userData?.find((x) => x.id === u.user_id);
+                return {
+                    id: u.user_id,
+                    first_name: u.first_name,
+                    last_name: u.last_name,
+                    created_at: u.created_at,
+                    face_verified: u.face_verified,
+                    role: u.role,
+                    warnings_count: u.warnings_count,
+                    total_item_violations: u.total_item_violations,
+                    dob: u.dob,
+                    id_image_url: match?.id_image_url || null,
+                    face_image_url: match?.face_image_url || null,
+                };
+            });
+
             setUsers(normalized);
         } catch (e) {
             console.error("Fetch users error", e);
@@ -73,12 +89,11 @@ export default function TotalUser() {
         } finally {
             const elapsed = performance.now() - start;
             const remaining = MIN_DURATION - elapsed;
-            if (remaining > 0) {
-                await new Promise((res) => setTimeout(res, remaining));
-            }
+            if (remaining > 0) await new Promise((res) => setTimeout(res, remaining));
             setLoading(false);
         }
     };
+
 
     useEffect(() => {
         fetchUsers();
@@ -103,7 +118,7 @@ export default function TotalUser() {
         return () => {
             try {
                 supabase.removeChannel(channel);
-            } catch (_) {}
+            } catch (_) { }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -508,11 +523,9 @@ export default function TotalUser() {
                                 <p className="text-sm text-gray-600 mt-0.5">
                                     {loading
                                         ? "Loading users..."
-                                        : `Showing ${filtered.length} of ${
-                                              users.length
-                                          } user${
-                                              users.length !== 1 ? "s" : ""
-                                          }`}
+                                        : `Showing ${filtered.length} of ${users.length
+                                        } user${users.length !== 1 ? "s" : ""
+                                        }`}
                                 </p>
                             </div>
                         </div>
@@ -567,6 +580,9 @@ export default function TotalUser() {
                                     <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                         Verification
                                     </th>
+                                    <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                        Face and ID Document
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -604,9 +620,8 @@ export default function TotalUser() {
                                 {!loading &&
                                     filtered.map((user) => {
                                         const fullName =
-                                            `${user.first_name || ""} ${
-                                                user.last_name || ""
-                                            }`.trim() || "(No Name)";
+                                            `${user.first_name || ""} ${user.last_name || ""
+                                                }`.trim() || "(No Name)";
                                         return (
                                             <tr
                                                 key={user.id}
@@ -636,7 +651,7 @@ export default function TotalUser() {
                                                 <td className="p-4">
                                                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
                                                         {typeof user.warnings_count ===
-                                                        "number"
+                                                            "number"
                                                             ? user.warnings_count
                                                             : 0}
                                                     </span>
@@ -644,7 +659,7 @@ export default function TotalUser() {
                                                 <td className="p-4">
                                                     <span className="text-sm text-gray-800">
                                                         {typeof user.total_item_violations ===
-                                                        "number"
+                                                            "number"
                                                             ? user.total_item_violations
                                                             : 0}
                                                     </span>
@@ -668,8 +683,8 @@ export default function TotalUser() {
                                                         <span className="text-sm text-gray-700">
                                                             {user.dob
                                                                 ? formatDate(
-                                                                      user.dob
-                                                                  )
+                                                                    user.dob
+                                                                )
                                                                 : "—"}
                                                         </span>
                                                     </div>
@@ -677,6 +692,18 @@ export default function TotalUser() {
                                                 <td className="p-4">
                                                     {getVerificationBadge(
                                                         user.face_verified
+                                                    )}
+                                                </td>
+                                                <td className="p-4">
+                                                    {user.id_image_url ? (
+                                                        <button
+                                                            onClick={() => setPreviewUser(user)}
+                                                            className="text-[#FFAB00] text-sm underline hover:text-[#FF8C00]"
+                                                        >
+                                                            View Face and ID
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-gray-400 text-sm">None</span>
                                                     )}
                                                 </td>
                                             </tr>
@@ -746,6 +773,28 @@ export default function TotalUser() {
                                             <p className="text-sm text-gray-500">
                                                 No ID document
                                             </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Face Photo */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                                        <UserCheck className="w-4 h-4 text-[#FFAB00]" />
+                                        Face Document
+                                    </h3>
+                                    {previewUser.face_image_url ? (
+                                        <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+                                            <img
+                                                src={previewUser.face_image_url}
+                                                alt="User Face Document"
+                                                className="w-full h-auto rounded-lg"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center py-12 bg-gray-100 rounded-xl border-2 border-dashed border-gray-300">
+                                            <UserX className="w-12 h-12 mb-2 text-gray-300" />
+                                            <p className="text-sm text-gray-500">No Face document</p>
                                         </div>
                                     )}
                                 </div>
