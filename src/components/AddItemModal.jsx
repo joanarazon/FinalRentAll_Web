@@ -59,11 +59,42 @@ export default function AddItemModal({
             });
             return;
         }
-        if (!form.title || !form.price_per_day) {
+
+        // Comprehensive required field validation
+        const errors = [];
+        const trimmed = {
+            title: form.title.trim(),
+            category_id: String(form.category_id || "").trim(),
+            description: form.description.trim(),
+            price_per_day: form.price_per_day,
+            deposit_fee: form.deposit_fee,
+            location: form.location.trim(),
+            quantity: form.quantity,
+        };
+
+        if (!trimmed.title) errors.push("Title is required");
+        if (!trimmed.category_id) errors.push("Category is required");
+        if (!trimmed.description) errors.push("Description is required");
+        if (!trimmed.price_per_day) errors.push("Price per day is required");
+        if (trimmed.price_per_day && Number(trimmed.price_per_day) <= 0)
+            errors.push("Price per day must be greater than 0");
+        if (!trimmed.deposit_fee && trimmed.deposit_fee !== "0")
+            errors.push("Deposit fee is required (use 0 if none)");
+        if (trimmed.deposit_fee && Number(trimmed.deposit_fee) < 0)
+            errors.push("Deposit fee cannot be negative");
+        if (!trimmed.quantity) errors.push("Quantity is required");
+        if (trimmed.quantity && Number(trimmed.quantity) < 1)
+            errors.push("Quantity must be at least 1");
+        if (!trimmed.location) errors.push("Location is required");
+        if (!imageFile) errors.push("Item image is required");
+
+        if (errors.length) {
             Swal.fire({
                 icon: "warning",
-                title: "Missing fields",
-                text: "Title and Price per day are required.",
+                title: "Please fix the following",
+                html: `<ul style='text-align:left'>${errors
+                    .map((e) => `<li>• ${e}</li>`)
+                    .join("")}</ul>`,
             });
             return;
         }
@@ -73,19 +104,15 @@ export default function AddItemModal({
             // Step 1: Insert item; let DB generate item_id
             const basePayload = {
                 user_id: userId,
-                title: form.title.trim(),
-                description: form.description.trim() || null,
-                price_per_day: parseFloat(form.price_per_day),
-                deposit_fee: form.deposit_fee
-                    ? parseFloat(form.deposit_fee)
-                    : 0,
-                location: form.location.trim() || null,
+                title: trimmed.title,
+                description: trimmed.description,
+                price_per_day: parseFloat(trimmed.price_per_day),
+                deposit_fee: parseFloat(trimmed.deposit_fee || "0"),
+                location: trimmed.location,
                 available: !!form.available,
-                category_id: form.category_id ? Number(form.category_id) : null,
+                category_id: Number(trimmed.category_id),
                 main_image_url: null,
-                quantity: form.quantity
-                    ? Math.max(1, parseInt(form.quantity, 10) || 1)
-                    : 1,
+                quantity: Math.max(1, parseInt(trimmed.quantity, 10) || 1),
             };
 
             const { data: inserted, error: insertErr } = await supabase
@@ -99,6 +126,7 @@ export default function AddItemModal({
             let publicUrl = null;
 
             // Step 2: If image provided, upload to Storage
+            // Image is required (validated earlier)
             if (imageFile && itemId) {
                 const path = `${userId}/${itemId}/${Date.now()}-${
                     imageFile.name
@@ -140,7 +168,7 @@ export default function AddItemModal({
                 await ItemNotifications.notifyItemSubmittedForReview(
                     userId,
                     itemId,
-                    form.title.trim()
+                    trimmed.title
                 );
             } catch (notificationError) {
                 console.error(
@@ -210,7 +238,9 @@ export default function AddItemModal({
                         placeholder="e.g., Cordless Drill"
                     />
 
-                    <label className="text-sm">Category</label>
+                    <label className="text-sm">
+                        Category<span className="text-red-500">*</span>
+                    </label>
                     <select
                         name="category_id"
                         value={form.category_id}
@@ -225,7 +255,9 @@ export default function AddItemModal({
                         ))}
                     </select>
 
-                    <label className="text-sm">Description</label>
+                    <label className="text-sm">
+                        Description<span className="text-red-500">*</span>
+                    </label>
                     <textarea
                         name="description"
                         value={form.description}
@@ -248,7 +280,10 @@ export default function AddItemModal({
                         />
                     </div>
                     <div>
-                        <label className="text-sm">Deposit fee (₱)</label>
+                        <label className="text-sm">
+                            Deposit fee (₱)
+                            <span className="text-red-500">*</span>
+                        </label>
                         <Input
                             name="deposit_fee"
                             type="number"
@@ -259,7 +294,9 @@ export default function AddItemModal({
                         />
                     </div>
                     <div>
-                        <label className="text-sm">Quantity</label>
+                        <label className="text-sm">
+                            Quantity<span className="text-red-500">*</span>
+                        </label>
                         <Input
                             name="quantity"
                             type="number"
@@ -270,7 +307,9 @@ export default function AddItemModal({
                         />
                     </div>
 
-                    <label className="text-sm">Location</label>
+                    <label className="text-sm">
+                        Location<span className="text-red-500">*</span>
+                    </label>
                     <Input
                         name="location"
                         value={form.location}
@@ -278,8 +317,9 @@ export default function AddItemModal({
                         placeholder="City / Barangay"
                     />
 
-
-
+                    <label className="text-sm">
+                        Image<span className="text-red-500">*</span>
+                    </label>
                     <input
                         type="file"
                         accept="image/*"

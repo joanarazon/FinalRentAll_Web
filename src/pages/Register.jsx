@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "../components/ui/button";
 import React, { useState, useRef } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 import {
@@ -143,6 +144,8 @@ function Register() {
     });
 
     const [errors, setErrors] = useState({});
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const handleImageUpload = (e, type) => {
         const file = e.target.files[0];
@@ -498,33 +501,77 @@ function Register() {
 
                         {/* Password */}
                         <form className="w-full mt-4">
-                            <input
-                                className="flex-1 shadow appearance-none border rounded-lg py-3 px-3 text-gray-700 placeholder-gray-400 focus:outline-none focus:shadow-outline w-full"
-                                type="password"
-                                placeholder="Password"
-                                value={formData.password}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        password: e.target.value,
-                                    })
-                                }
-                            />
+                            <div className="relative">
+                                <input
+                                    className="flex-1 shadow appearance-none border rounded-lg py-3 px-3 pr-12 text-gray-700 placeholder-gray-400 focus:outline-none focus:shadow-outline w-full"
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="Password"
+                                    value={formData.password}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            password: e.target.value,
+                                        })
+                                    }
+                                    autoComplete="new-password"
+                                />
+                                <button
+                                    type="button"
+                                    aria-label={
+                                        showPassword
+                                            ? "Hide password"
+                                            : "Show password"
+                                    }
+                                    onClick={() => setShowPassword((s) => !s)}
+                                    className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
+                                >
+                                    {showPassword ? (
+                                        <EyeOff size={20} />
+                                    ) : (
+                                        <Eye size={20} />
+                                    )}
+                                </button>
+                            </div>
                         </form>
 
                         <form className="w-full mt-4">
-                            <input
-                                className="flex-1 shadow appearance-none border rounded-lg py-3 px-3 text-gray-700 placeholder-gray-400 focus:outline-none focus:shadow-outline w-full"
-                                type="password"
-                                placeholder="Confirm Password"
-                                value={formData.confirmPassword}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        confirmPassword: e.target.value,
-                                    })
-                                }
-                            />
+                            <div className="relative">
+                                <input
+                                    className="flex-1 shadow appearance-none border rounded-lg py-3 px-3 pr-12 text-gray-700 placeholder-gray-400 focus:outline-none focus:shadow-outline w-full"
+                                    type={
+                                        showConfirmPassword
+                                            ? "text"
+                                            : "password"
+                                    }
+                                    placeholder="Confirm Password"
+                                    value={formData.confirmPassword}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            confirmPassword: e.target.value,
+                                        })
+                                    }
+                                    autoComplete="new-password"
+                                />
+                                <button
+                                    type="button"
+                                    aria-label={
+                                        showConfirmPassword
+                                            ? "Hide confirm password"
+                                            : "Show confirm password"
+                                    }
+                                    onClick={() =>
+                                        setShowConfirmPassword((s) => !s)
+                                    }
+                                    className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
+                                >
+                                    {showConfirmPassword ? (
+                                        <EyeOff size={20} />
+                                    ) : (
+                                        <Eye size={20} />
+                                    )}
+                                </button>
+                            </div>
                         </form>
 
                         {/* Upload ID (Step 1) */}

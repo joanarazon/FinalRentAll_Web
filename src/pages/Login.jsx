@@ -1,6 +1,6 @@
 import rentLogo from "../assets/rent.png";
 import { useState } from "react";
-import { Lock, Mail, Phone, Loader2 } from "lucide-react";
+import { Lock, Mail, Phone, Loader2, Eye, EyeOff } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToastApi } from "../components/ui/toast";
@@ -12,6 +12,7 @@ function Login() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loginMethod, setLoginMethod] = useState("password"); // password | email_otp | sms_otp
+    const [showPassword, setShowPassword] = useState(false);
     const [emailOtpSent, setEmailOtpSent] = useState(false);
     const [emailOtpCode, setEmailOtpCode] = useState("");
     const [smsPhone, setSmsPhone] = useState("");
@@ -253,7 +254,7 @@ function Login() {
             <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
                 <div className="w-[600px] max-w-full h-auto bg-white shadow-lg rounded-2xl flex flex-col items-center p-6">
                     <img
-                        src='logo.png'
+                        src="logo.png"
                         alt="Logo"
                         className="w-20 h-20 object-contain"
                     />
@@ -327,17 +328,39 @@ function Login() {
                         {/* Password login */}
                         {loginMethod === "password" && (
                             <>
-                                <div className="mb-6">
+                                <div className="mb-6 relative">
                                     <input
-                                        className="shadow appearance-none border rounded-lg w-full py-3 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400"
+                                        className="shadow appearance-none border rounded-lg w-full py-3 px-3 pr-12 text-gray-700 leading-tight focus:outline-none focus:shadow-outline placeholder-gray-400"
                                         id="password"
-                                        type="password"
+                                        type={
+                                            showPassword ? "text" : "password"
+                                        }
                                         placeholder="Password"
                                         value={password}
                                         onChange={(e) =>
                                             setPassword(e.target.value)
                                         }
+                                        autoComplete="current-password"
                                     />
+                                    <button
+                                        type="button"
+                                        aria-label={
+                                            showPassword
+                                                ? "Hide password"
+                                                : "Show password"
+                                        }
+                                        onClick={() =>
+                                            setShowPassword((s) => !s)
+                                        }
+                                        className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
+                                        tabIndex={0}
+                                    >
+                                        {showPassword ? (
+                                            <EyeOff size={20} />
+                                        ) : (
+                                            <Eye size={20} />
+                                        )}
+                                    </button>
                                 </div>
                                 <div>
                                     <a
