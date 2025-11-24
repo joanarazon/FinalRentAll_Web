@@ -5,16 +5,21 @@ import AdminLayout from "../../../components/AdminLayout";
 import { supabase } from "../../../../supabaseClient";
 import { Button } from "@/components/ui/button";
 import {
-    CalendarIcon,
+    Calendar,
     Loader2,
     PackageSearch,
     RefreshCw,
     ShieldAlert,
+    Trash2,
 } from "lucide-react";
 
 export default function TotalItems() {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [deletingId, setDeletingId] = useState(null);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState(null);
+    
     // Filters
     const [filterTitle, setFilterTitle] = useState("");
     const [filterOwnerId, setFilterOwnerId] = useState("");
@@ -54,6 +59,39 @@ export default function TotalItems() {
         }
     };
 
+    const handleDeleteClick = (item) => {
+        setItemToDelete(item);
+        setShowDeleteDialog(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!itemToDelete) return;
+        
+        setDeletingId(itemToDelete.item_id);
+        try {
+            const { error } = await supabase
+                .from("items")
+                .delete()
+                .eq("item_id", itemToDelete.item_id);
+
+            if (error) throw error;
+
+            // Refresh the list after successful deletion
+            await fetchItems();
+        } catch (e) {
+            console.error("Delete failed", e);
+            alert("Failed to delete item: " + e.message);
+        } finally {
+            setDeletingId(null);
+            setShowDeleteDialog(false);
+            setItemToDelete(null);
+        }
+    };
+
+    const handleDeleteCancel = () => {
+        setShowDeleteDialog(false);
+        setItemToDelete(null);
+    };
 
     useEffect(() => {
         fetchItems();
@@ -330,13 +368,16 @@ export default function TotalItems() {
                                     <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                         Item Image
                                     </th>
+                                    <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                        Actions
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {loading && (
                                     <tr>
                                         <td
-                                            colSpan={7}
+                                            colSpan={9}
                                             className="p-8 text-center text-gray-500"
                                         >
                                             <div className="flex items-center justify-center gap-2">
@@ -349,7 +390,7 @@ export default function TotalItems() {
                                 {!loading && filteredRows.length === 0 && (
                                     <tr>
                                         <td
-                                            colSpan={7}
+                                            colSpan={9}
                                             className="p-8 text-center text-gray-500"
                                         >
                                             <div className="flex items-center justify-center gap-2">
@@ -397,13 +438,13 @@ export default function TotalItems() {
                                             </td>
                                             <td className="p-4">
                                                 <div className="flex items-center gap-2">
-                                                    <CalendarIcon className="w-4 h-4 text-gray-400" />
+                                                    <Calendar className="w-4 h-4 text-gray-400" />
                                                     {fmt(r.created_at)}
                                                 </div>
                                             </td>
                                             <td className="p-4">
                                                 <div className="flex items-center gap-2">
-                                                    <CalendarIcon className="w-4 h-4 text-gray-400" />
+                                                    <Calendar className="w-4 h-4 text-gray-400" />
                                                     {fmt(r.last_violation_at)}
                                                 </div>
                                             </td>
@@ -420,12 +461,86 @@ export default function TotalItems() {
                                                     <span className="text-gray-400 text-sm">No Image</span>
                                                 )}
                                             </td>
+                                            <td className="p-4">
+                                                <button
+                                                    onClick={() => handleDeleteClick(r)}
+                                                    disabled={deletingId === r.item_id}
+                                                    className="inline-flex items-center px-3 py-1.5 border border-red-300 rounded-md text-sm text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                >
+                                                    {deletingId === r.item_id ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <>
+                                                            <Trash2 className="h-4 w-4 mr-1" />
+                                                            Delete
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
                             </tbody>
                         </table>
                     </div>
                 </div>
+
+                {/* Delete Confirmation Dialog */}
+                {showDeleteDialog && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                                    <Trash2 className="w-6 h-6 text-red-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900">
+                                        Delete Item
+                                    </h3>
+                                    <p className="text-sm text-gray-500">
+                                        This action cannot be undone
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div className="mb-6">
+                                <p className="text-sm text-gray-700 mb-2">
+                                    Are you sure you want to delete this item?
+                                </p>
+                                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                    <p className="font-medium text-gray-900 mb-1">
+                                        {itemToDelete?.title}
+                                    </p>
+                                    <p className="text-xs text-gray-500 font-mono">
+                                        ID: {itemToDelete?.item_id}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handleDeleteCancel}
+                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleDeleteConfirm}
+                                    disabled={deletingId !== null}
+                                    className="flex-1 px-4 py-2 bg-red-600 border border-red-600 rounded-md text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    {deletingId ? (
+                                        <span className="flex items-center justify-center gap-2">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Deleting...
+                                        </span>
+                                    ) : (
+                                        "Delete Item"
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </AdminLayout>
     );
