@@ -29,7 +29,6 @@ import Profile from "./pages/Profile";
 import Favorites from "./pages/Favorites.jsx";
 import { useUserContext } from "./context/UserContext.jsx";
 import { NotificationProvider } from "./context/NotificationContext.jsx";
-import ItemLists from "./pages/ItemLists.jsx";
 import { FavoritesProvider } from "./context/FavoritesContext.jsx";
 import Loading from "./components/Loading.jsx";
 import PendingVerification from "./pages/PendingVerification.jsx";
@@ -101,7 +100,6 @@ export default function App() {
                 element={<OwnerBookingRequests />}
               />
               <Route path="/my-bookings" element={<MyBookings />} />
-              <Route path="/itemlists" element={<ItemLists />} />
               <Route path="/my-ratings" element={<MyRatings />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/profile/:id" element={<Profile />} />

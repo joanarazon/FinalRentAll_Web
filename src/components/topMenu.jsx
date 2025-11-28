@@ -151,13 +151,6 @@ export default function TopMenu({ activePage, searchTerm, setSearchTerm }) {
               </Badge>
             )}
           </Button>
-          <Button
-            variant="link"
-            className={`${linkClass("item-lists")} cursor-pointer`}
-            onClick={() => navigate("/itemlists")}
-          >
-            Item Lists
-          </Button>
         </div>
 
         {/* Mobile menu button */}
